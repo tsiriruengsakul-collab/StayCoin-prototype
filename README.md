@@ -22,6 +22,17 @@ The website uses the name in `src/brand.ts`. Edit `brand.websiteName` there to r
 
 Hardhat uses the pinned Solidity compiler and an in-memory network for tests. For a persistent local development node, run `npm run chain` in one terminal and `npm run deploy:local` in another. That address is local only. The web app signs writes only on Sepolia.
 
+## Local tests for the uploaded Remix contract
+
+`npm test -- test/StayCoinNightTokenV2.ts` runs the booking lifecycle on Hardhat’s simulated network. It deploys both compiled artifacts by fully qualified name.
+
+- `contracts/remix/StayCoinNightTokenV2.sol:StayCoinNightTokenV2` is the exact uploaded source. Its SHA-256 is `a13d7bf139dc6a4313c44a0ac1fe8aaeae9d6e11515aa4e56627d68dc8ddf80c`.
+- `contracts/StayCoinNightTokenV2.sol:StayCoinNightTokenV2` adds a single Bangkok-midnight timestamp per inventory day, limits check-in to that day, and opens expiry after the day ends. Resale quotes close at the same cutoff as sales. The owner role remains in place for fee collection and bond settlement.
+
+The test sends exactly `0.001 ETH` for the initial purchase and `0.0015 ETH` for the resale. After check-in releases the 10% bond, it verifies gas-adjusted withdrawals of `0.000095 ETH` to the platform, `0.001075 ETH` to the hotel, and `0.00133 ETH` to the first traveler.
+
+The website and its deployment script still use the existing `StayCoinNightToken` contract. Run `npm test` to include that contract’s suite.
+
 ## Version 2 features
 
 - **Accounts.** Sign in with MetaMask by signing a message for this website. The browser keeps an eight-hour, tab-scoped session that follows the signed-in address. Demo mode uses a local session with sample data. The app uses no passwords or account server. Contract roles and wallet transaction signatures authorize all on-chain changes.
