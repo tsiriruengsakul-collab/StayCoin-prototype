@@ -1,0 +1,13 @@
+node_modules/
+dist/
+artifacts/
+cache/
+coverage/
+typechain-types/
+.env
+.env.*
+!.env.example
+.vercel/
+.DS_Store
+
+StayCoinNightToken.flat.sol
