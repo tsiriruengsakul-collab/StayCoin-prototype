@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { BrowserProvider, type Eip1193Provider } from "ethers";
-import { errorText, sepolia } from "./chain";
+import { BrowserProvider, verifyMessage, type Eip1193Provider } from "ethers";
+import { brand } from "./brand";
+import { errorText, sameAddress, sepolia } from "./chain";
 
 type InjectedWallet = Eip1193Provider & {
   isMetaMask?: boolean;
@@ -9,6 +10,13 @@ type InjectedWallet = Eip1193Provider & {
   removeListener?: (event: string, handler: (...args: never[]) => void) => void;
 };
 type WalletInfo = { address: string | null; chain: string | null };
+const sessionKey = "staypass-session-v2";
+const sessionLifetime = 8 * 60 * 60 * 1000;
+type Session = { mode: "demo" | "wallet"; address?: string; expires: number };
+function storedSession(): Session | null {
+  try { return JSON.parse(sessionStorage.getItem(sessionKey) || "null"); }
+  catch { return null; }
+}
 const disconnected = { address: null, chain: null };
 
 const injected = () => {
@@ -19,12 +27,15 @@ const injected = () => {
 export function useWallet() {
   const [wallet, setWallet] = useState<InjectedWallet | null>(injected);
   const [info, setInfo] = useState<WalletInfo>(disconnected);
+  const [session, setSession] = useState(storedSession);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const sync = useCallback(async (active: InjectedWallet, ask = false) => {
     const accounts = await active.request({ method: ask ? "eth_requestAccounts" : "eth_accounts" }) as string[];
     const chain = await active.request({ method: "eth_chainId" }) as string;
-    setInfo({ address: accounts[0] ?? null, chain });
+    const address = accounts[0] ?? null;
+    setInfo({ address, chain });
+    return address;
   }, []);
 
   useEffect(() => {
@@ -36,7 +47,7 @@ export function useWallet() {
   useEffect(() => {
     if (!wallet) return;
     const update = () => { void sync(wallet).catch((err) => { setInfo(disconnected); setError(errorText(err)); }); };
-    const disconnect = () => setInfo(disconnected);
+    const disconnect = () => { setInfo(disconnected); setSession(null); };
     update();
     wallet.on?.("accountsChanged", update);
     wallet.on?.("chainChanged", update);
@@ -48,13 +59,34 @@ export function useWallet() {
     };
   }, [wallet, sync]);
 
-  const connect = async () => {
+  useEffect(() => {
+    try {
+      if (session) sessionStorage.setItem(sessionKey, JSON.stringify(session));
+      else sessionStorage.removeItem(sessionKey);
+    } catch { /* Session stays in memory. */ }
+    if (!session) return;
+    const timer = window.setTimeout(() => setSession(null), Math.max(0, session.expires - Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [session]);
+
+  const signIn = async () => {
     const active = wallet ?? injected();
     if (!active) { setError("Install or open MetaMask to connect a wallet."); return; }
     setWallet(active);
     setBusy(true);
     setError("");
-    try { await sync(active, true); }
+    try {
+      const address = await sync(active, true);
+      if (!address) throw new Error("Choose an account in MetaMask.");
+      const message = brand.websiteName + " sign-in\nWebsite: " + window.location.origin + "\nWallet: " + address
+        + "\nCode: " + crypto.randomUUID() + "\nThis message does not send a transaction.";
+      const signer = await new BrowserProvider(active, "any").getSigner(address);
+      const signature = await signer.signMessage(message);
+      if (!sameAddress(verifyMessage(message, signature), address) || !sameAddress(await sync(active), address)) {
+        throw new Error("Your wallet changed. Sign in again.");
+      }
+      setSession({ mode: "wallet", address, expires: Date.now() + sessionLifetime });
+    }
     catch (err) { setError(errorText(err)); }
     finally { setBusy(false); }
   };
@@ -84,6 +116,14 @@ export function useWallet() {
     return new BrowserProvider(wallet, "any");
   }, [wallet]);
 
-  return { ...info, installed: Boolean(wallet), ready: info.chain === sepolia.hex, connect, switchNetwork,
-    provider, busy, error };
+  const valid = Boolean(session && session.expires > Date.now());
+  const signedIn = valid && session?.mode === "wallet" && sameAddress(info.address, session.address ?? null);
+  const isDemo = valid && session?.mode === "demo";
+  const demoSignIn = () => {
+    setError("");
+    setSession({ mode: "demo", expires: Date.now() + sessionLifetime });
+  };
+  const signOut = () => { setSession(null); setError(""); };
+  return { ...info, signedIn, isDemo, ready: info.chain === sepolia.hex, signIn, demoSignIn, signOut,
+    switchNetwork, provider, busy, error };
 }

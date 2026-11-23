@@ -1,25 +1,30 @@
 import { StrictMode, useEffect, useState, type MouseEvent } from "react";
 import { createRoot } from "react-dom/client";
-import { CircleAlert, Menu, Wallet, X } from "lucide-react";
+import { Building2, CircleAlert, Menu, Wallet, X } from "lucide-react";
 import "@fontsource-variable/manrope";
 import "@fontsource-variable/inter";
 import "./style.css";
 import { brand } from "./brand";
 import { contractAddress, invalidAddress, shortAddress } from "./chain";
 import { Activity, Dashboard, MyBookings, Resale } from "./BookingPages";
+import { SignIn, signInLink } from "./Account";
+import { Passes, Rewards } from "./Extras";
 import { Marketplace } from "./Marketplace";
 import { useMarket } from "./useMarket";
 
 const routes = [
-  { path: "/", title: "Explore stays", Page: Marketplace },
-  { path: "/resale", title: "Resale", Page: Resale },
-  { path: "/bookings", title: "My bookings", Page: MyBookings },
-  { path: "/dashboard", title: "Hotel dashboard", Page: Dashboard },
-  { path: "/activity", title: "Activity", Page: Activity },
+  { path: "/", title: "Explore stays", Page: Marketplace, customerNav: true },
+  { path: "/resale", title: "Resale", Page: Resale, customerNav: true },
+  { path: "/happy-pass", title: brand.seasonalPass, Page: Passes, customerNav: true },
+  { path: "/bookings", title: "My bookings", Page: MyBookings, customerNav: true },
+  { path: "/rewards", title: "StayPoints", Page: Rewards, customerNav: true },
+  { path: "/dashboard", title: "Hotel partner portal", Page: Dashboard, customerNav: false },
+  { path: "/activity", title: "Activity", Page: Activity, customerNav: false },
+  { path: "/sign-in", title: "Sign in", Page: SignIn, customerNav: false },
 ];
 
 function Wordmark() {
-  return <a className="wordmark" href="/" aria-label={brand.websiteName + " home"}><img src="/keycard.svg" alt="" />{brand.websiteName}</a>;
+  return <a className="wordmark" href="/" aria-label={brand.websiteName + " home"}><img src="/stay-logo.svg" alt="" />{brand.websiteName}</a>;
 }
 
 function App() {
@@ -45,7 +50,7 @@ function App() {
     if (!anchor || anchor.target || anchor.origin !== window.location.origin || !routes.some(({ path }) => anchor.pathname === path)) return;
     event.preventDefault();
     if (location !== anchor.pathname) {
-      window.history.pushState(null, "", anchor.pathname);
+      window.history.pushState(null, "", anchor.pathname + anchor.search);
       setLocation(anchor.pathname);
       market.setActionError("");
       window.scrollTo(0, 0);
@@ -54,9 +59,12 @@ function App() {
     setMenu(false);
   };
 
-  const latest = market.activity[0];
+  const latest = wallet.signedIn ? market.activity.find((item) => item.account.toLowerCase() === wallet.address?.toLowerCase()) : undefined;
+  const portal = route?.path === "/dashboard";
+  const live = Boolean(market.synced && !wallet.isDemo);
   let message = "Sample inventory is for demonstration. Live bookings require a Sepolia deployment.";
-  if (invalidAddress) message = "The configured address is invalid. Sample inventory is shown.";
+  if (wallet.isDemo) message = "Demo account · sample inventory and example balances only.";
+  else if (invalidAddress) message = "The configured address is invalid. Sample inventory is shown.";
   else if (contractAddress && !wallet.ready) message = "Use MetaMask on Sepolia to load live inventory. Sample inventory is shown.";
   else if (market.marketError) message = market.marketError + " Sample inventory is shown.";
   else if (contractAddress) message = "Loading live Sepolia inventory. Sample inventory is shown until it is available.";
@@ -65,22 +73,24 @@ function App() {
     <a className="skip-link" href="#content">Skip to content</a>
     <header className="topbar">
       <div className="shell topbar-inner"><Wordmark />
-        <nav className={menu ? "main-nav open" : "main-nav"} aria-label="Main navigation" id="main-nav">
-          {routes.map(({ path, title }) => <a href={path} key={path} aria-current={route?.path === path ? "page" : undefined}>{title}</a>)}
+        <nav className={menu ? "main-nav open" : "main-nav"} aria-label={portal ? "Partner navigation" : "Main navigation"} id="main-nav">
+          {portal ? <><a href="/dashboard" aria-current="page">Partner portal</a><a href="/">Back to marketplace</a></>
+            : routes.filter(({ customerNav }) => customerNav).map(({ path, title }) => <a href={path} key={path} aria-current={route?.path === path ? "page" : undefined}>{title}</a>)}
         </nav>
         <div className="wallet-header">
-          {wallet.address ? <>
-            {wallet.ready ? <span className="wallet-address" title={wallet.address}><Wallet size={17} /> {shortAddress(wallet.address)}</span>
-              : <button className="button wallet-button" disabled={wallet.busy} onClick={() => void wallet.switchNetwork()}><Wallet size={17} /> Switch to Sepolia</button>}
-          </> : <button className="button wallet-button" disabled={wallet.busy} onClick={() => void wallet.connect()}><Wallet size={17} /> Connect wallet</button>}
+          {wallet.signedIn || wallet.isDemo ? <a className="button wallet-button" href="/sign-in"><Wallet size={17} /> {wallet.isDemo ? "Demo account" : shortAddress(wallet.address!)}</a>
+              : <a className="button wallet-button" href={signInLink(portal ? "/dashboard" : route?.path === "/sign-in" ? "/" : route?.path ?? "/")}><Wallet size={17} /> Sign in</a>}
           <button className="menu-button" aria-controls="main-nav" aria-expanded={menu} aria-label={menu ? "Close navigation" : "Open navigation"}
             onClick={() => setMenu(!menu)}>{menu ? <X /> : <Menu />}</button>
         </div>
       </div>
     </header>
     <div className="shell notices">
-      <div className="status-strip" role="status"><span className={market.synced ? "badge live" : "badge"}>{market.synced ? "SEPOLIA" : "DEMO MODE"}</span>
-        <span>{market.synced ? "Transactions use test ETH on Sepolia." : message}</span></div>
+      <div className="status-strip" role="status"><span className={live ? "badge live" : "badge"}>{live ? "SEPOLIA" : "DEMO MODE"}</span>
+        <span>{live ? "Transactions use test ETH on Sepolia." : message}</span></div>
+      {wallet.signedIn && !wallet.ready && <div className="status-strip transaction-strip" role="status">
+        <span>Switch to Sepolia for live test transactions.</span><button className="button secondary compact" disabled={wallet.busy}
+          onClick={() => void wallet.switchNetwork()}>Switch network</button></div>}
       {(wallet.error || market.actionError) && <div className="notice-error" role="alert"><CircleAlert size={19} />
         <span>{market.actionError || wallet.error}</span></div>}
       {market.busy && <div className="status-strip transaction-strip" role="status">Complete the wallet prompt or follow confirmation in <a href="/activity">Activity</a>.</div>}
@@ -89,8 +99,9 @@ function App() {
     </div>
     <main id="content" tabIndex={-1}><Page market={market} /></main>
     <footer className="footer"><div className="shell footer-inner"><div><Wordmark /><p>{brand.tagline}</p></div>
-      <span className="token-badge"><img src="/keycard.svg" alt="" /> {brand.tokenSymbol}</span>
-      <span className="footer-test">Sepolia testnet marketplace</span></div></footer>
+      <span className="token-badge"><img src="/stay-logo.svg" alt="" /> {brand.tokenSymbol}</span>
+      <nav className="footer-links" aria-label="Footer navigation"><a href="/activity">Transaction activity</a>
+        <a href="/dashboard"><Building2 size={16} /> Hotel partner portal</a></nav></div></footer>
   </div>;
 }
 

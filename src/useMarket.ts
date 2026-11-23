@@ -35,7 +35,6 @@ export function useMarket() {
 
   useEffect(() => {
     setMarketError("");
-    setSnapshot(undefined);
     if (!context) return;
     const provider = wallet.provider();
     let active = true;
@@ -52,6 +51,9 @@ export function useMarket() {
         const contract = marketplace(provider);
         if (await contract.symbol({ blockTag: block.number }) !== brand.tokenSymbol) {
           throw new Error("Configure the deployed Night Token contract.");
+        }
+        if (await contract.VERSION({ blockTag: block.number }).catch(() => null) !== 2n) {
+          throw new Error("Set the address of the Version 2 contract to enable the marketplace.");
         }
         const data = await readMarket(contract, wallet.address, block.number);
         if (active && context) {
@@ -99,7 +101,7 @@ export function useMarket() {
   }, [activity, wallet.ready, wallet.provider]);
 
   const synced = snapshot?.context === context ? snapshot : undefined;
-  const canWrite = Boolean(synced && wallet.address && !marketError);
+  const canWrite = Boolean(synced && wallet.address && wallet.signedIn && !marketError);
   const run = async (label: string, submit: (contract: Contract) => Promise<TransactionResponse>) => {
     if (!canWrite || !wallet.address || actionLock.current) return false;
     const account = wallet.address;

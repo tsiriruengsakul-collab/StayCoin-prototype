@@ -209,4 +209,190 @@ describe("StayCoin Night Token", function () {
     assert.equal(await web.proceeds(owner.address), price / 20n + quote.platform);
   });
 
+  it("issues non-transferable StayPoints once at check-in and funds up to a 20% discount", async () => {
+    await book();
+    await mint(date + 2 * day);
+    await assert.rejects(contract.connect(traveler).fundRewards({ value: price }), /OwnableUnauthorizedAccount/);
+    await (await contract.fundRewards({ value: price })).wait();
+    assert.equal(await contract.pointBalance(traveler.address), 0n);
+    await advance(date);
+    await (await contract.connect(hotel).checkIn(1, traveler.address)).wait();
+    const earned = price / await contract.POINT_EARN_UNIT();
+    assert.equal(await contract.pointBalance(traveler.address), earned);
+    await assert.rejects(contract.connect(hotel).checkIn(1, traveler.address), /Not redeemable/);
+    assert.equal(await contract.pointBalance(buyer.address), 0n);
+
+    const discount = earned * await contract.POINT_VALUE();
+    await assert.rejects(contract.connect(traveler).buyNightWithPoints(2, earned + 1n, { value: price }), /Points exceed limit/);
+    await assert.rejects(contract.connect(traveler).buyNightWithPoints(2, earned, { value: price }), /Incorrect test ETH payment/);
+    await (await contract.connect(traveler).buyNightWithPoints(2, earned, { value: price - discount })).wait();
+    assert.equal(await contract.pointBalance(traveler.address), 0n);
+    assert.equal(await contract.rewardsReserve(), price - discount);
+    assert.equal(await contract.proceeds(hotel.address), 2n * price * 95n / 100n);
+    assert.equal((await contract.nights(2)).lastPaidPrice, price - discount);
+  });
+
+  it("rejects discounts with insufficient reserve, applies the 20% cap, and expires unused points", async () => {
+    await book();
+    const small = parseEther("0.00005");
+    await (await contract.connect(hotel).createNight(date + day, "Small room", small)).wait();
+    await mint(date + 2 * day);
+    await advance(date);
+    await (await contract.connect(hotel).checkIn(1, traveler.address)).wait();
+    await assert.rejects(contract.connect(traveler).buyNightWithPoints(2, 11, { value: small }), /Points exceed limit/);
+    await assert.rejects(contract.connect(traveler).buyNightWithPoints(3, 1, { value: price }), /Rewards reserve too low/);
+    await advance(Number(await contract.pointsExpireAt(traveler.address)));
+    assert.equal(await contract.pointBalance(traveler.address), 0n);
+  });
+
+  const passPrice = parseEther("0.0014");
+  const seasonEnd = () => date + 3 * day;
+  async function preparePass() {
+    await (await contract.setHotelTier(hotel.address, 4)).wait();
+    await (await contract.createHappyPass(4, date, seasonEnd(), passPrice)).wait();
+    await mint();
+    await (await contract.connect(hotel).commitHappyNight(1, 1)).wait();
+  }
+
+  it("presells only committed nights, and burns a redeemed pass for a real hotel booking", async () => {
+    await preparePass();
+    await (await contract.registerHotel(outsider.address, "Demo Garden", "Krabi", 20)).wait();
+    await (await contract.setHotelTier(outsider.address, 4)).wait();
+    await (await contract.connect(outsider).createNight(date + day, "Suite", price)).wait();
+    await (await contract.connect(outsider).commitHappyNight(1, 2)).wait();
+    await assert.rejects(contract.connect(traveler).buyNight(1, { value: price }), /Not available/);
+    await assert.rejects(contract.connect(traveler).buyHappyPass(1, { value: price }), /Incorrect test ETH payment/);
+    await (await contract.connect(traveler).buyHappyPass(1, { value: passPrice })).wait();
+    await (await contract.connect(buyer).buyHappyPass(1, { value: passPrice })).wait();
+    await assert.rejects(contract.connect(outsider).buyHappyPass(1, { value: passPrice }), /Pass unavailable/);
+    const pass = await contract.happyPasses(1);
+    const token = await ethers.getContractAt("HappyPassToken", pass.token);
+    assert.equal(await token.decimals(), 0n);
+    assert.equal(await token.balanceOf(traveler.address), 1n);
+    assert.equal(await contract.proceeds(hotel.address), 0n);
+    await (await contract.connect(traveler).redeemHappyPass(1, 2)).wait();
+    assert.equal(await token.balanceOf(traveler.address), 0n);
+    assert.equal(await contract.balanceOf(traveler.address, 2), 1n);
+    assert.equal(await contract.proceeds(outsider.address), passPrice * 95n / 100n);
+    assert.equal(await contract.proceeds(owner.address), passPrice / 20n);
+    await assert.rejects(contract.connect(buyer).redeemHappyPass(1, 2), /Night unavailable/);
+    const block = await ethers.provider.getBlock("latest");
+    assert.ok(block);
+    const web = new Contract(await contract.getAddress(), nightTokenAbi, ethers.provider);
+    const market = await readMarket(web, buyer.address, block.number);
+    assert.equal(market.passes[0].balance, 1n);
+    assert.equal(market.nights[1].passId, 1n);
+  });
+
+  it("enforces season, tier and pricing rules for committed inventory", async () => {
+    await (await contract.createHappyPass(4, date, seasonEnd(), passPrice)).wait();
+    await mint();
+    await assert.rejects(contract.connect(hotel).commitHappyNight(1, 1), /tier mismatch/);
+    await (await contract.setHotelTier(hotel.address, 4)).wait();
+    await mint(seasonEnd());
+    await assert.rejects(contract.connect(hotel).commitHappyNight(1, 2), /outside season/);
+    await (await contract.connect(hotel).createNight(date + day, "Basic", passPrice)).wait();
+    await assert.rejects(contract.connect(hotel).commitHappyNight(1, 3), /at least 30 percent cheaper/);
+    await advance(date);
+    await assert.rejects(contract.connect(hotel).commitHappyNight(1, 1), /presale closed/);
+    await assert.rejects(contract.connect(traveler).buyHappyPass(1, { value: passPrice }), /Pass unavailable/);
+  });
+
+  it("transfers a valid pass before expiry and refunds its current holder once after expiry", async () => {
+    await preparePass();
+    await (await contract.connect(traveler).buyHappyPass(1, { value: passPrice })).wait();
+    const token = await ethers.getContractAt("HappyPassToken", (await contract.happyPasses(1)).token);
+    await (await token.connect(traveler).transfer(buyer.address, 1)).wait();
+    await assert.rejects(contract.connect(buyer).refundExpiredPass(1), /has not ended/);
+    await advance(seasonEnd());
+    await assert.rejects(token.connect(buyer).transfer(traveler.address, 1), /Pass expired/);
+    await (await contract.connect(buyer).refundExpiredPass(1)).wait();
+    assert.equal(await contract.proceeds(buyer.address), passPrice);
+    assert.equal(await token.totalSupply(), 0n);
+    await assert.rejects(contract.connect(buyer).refundExpiredPass(1), /ERC20InsufficientBalance/);
+  });
+
+  async function protectedBooking() {
+    await mint();
+    await assert.rejects(contract.connect(hotel).protectNight(1), /Bond available is too low/);
+    await (await contract.connect(hotel).depositHotelBond({ value: price })).wait();
+    await (await contract.connect(hotel).protectNight(1)).wait();
+    await (await contract.connect(traveler).buyNight(1, { value: price })).wait();
+  }
+
+  it("locks prefunded protection, resolves a valid claim and credits the current holder after resale", async () => {
+    await protectedBooking();
+    await assert.rejects(contract.connect(hotel).withdrawHotelBond(price), /Bond unavailable/);
+    await assert.rejects(contract.connect(traveler).requestBondRefund(1), /not eligible/);
+    await (await contract.connect(traveler).listForResale(1, ask)).wait();
+    await (await contract.connect(buyer).buyResale(1, traveler.address, { value: ask })).wait();
+    assert.equal(await contract.resaleCount(1), 1n);
+    assert.equal(await contract.resaleVolume(1), ask);
+    await advance(date);
+    await assert.rejects(contract.connect(traveler).requestBondRefund(1), /not eligible/);
+    await (await contract.connect(buyer).requestBondRefund(1)).wait();
+    await assert.rejects(contract.connect(hotel).checkIn(1, buyer.address), /claim pending/);
+    await assert.rejects(contract.connect(hotel).resolveBondClaim(1, true), /OwnableUnauthorizedAccount/);
+    await (await contract.resolveBondClaim(1, true)).wait();
+    assert.equal(await contract.proceeds(buyer.address), price);
+    assert.equal(await contract.hotelBond(hotel.address), 0n);
+    assert.equal(await contract.hotelBondLocked(hotel.address), 0n);
+    assert.equal(await contract.balanceOf(buyer.address, 1), 0n);
+    assert.equal(await contract.bondClaims(1), 3n);
+    assert.equal(await contract.pointBalance(buyer.address), 0n);
+    await assert.rejects(contract.resolveBondClaim(1, true), /No pending claim/);
+  });
+
+  it("releases collateral at check-in and lets hotels move free collateral to proceeds", async () => {
+    await protectedBooking();
+    await advance(date);
+    await (await contract.connect(hotel).checkIn(1, traveler.address)).wait();
+    assert.equal(await contract.hotelBondLocked(hotel.address), 0n);
+    assert.equal(await contract.nightBond(1), 0n);
+    await (await contract.connect(hotel).withdrawHotelBond(price)).wait();
+    assert.equal(await contract.proceeds(hotel.address), price + price * 95n / 100n);
+  });
+
+  it("allows recovery for a pending claim after the review window", async () => {
+    await protectedBooking();
+    await advance(date);
+    await (await contract.connect(traveler).requestBondRefund(1)).wait();
+    await assert.rejects(contract.connect(traveler).claimTimedOutBond(1), /Review window is open/);
+    await advance(date + 7 * day);
+    await assert.rejects(contract.resolveBondClaim(1, false), /Review window ended/);
+    await (await contract.connect(traveler).claimTimedOutBond(1)).wait();
+    assert.equal(await contract.proceeds(traveler.address), price);
+  });
+
+  it("returns only surplus seasonal inventory during presale", async () => {
+    await preparePass();
+    await mint(date + day);
+    await (await contract.connect(hotel).commitHappyNight(1, 2)).wait();
+    await (await contract.connect(traveler).buyHappyPass(1, { value: passPrice })).wait();
+    await (await contract.connect(hotel).releaseHappyNight(2)).wait();
+    assert.equal(await contract.passForNight(2), 0n);
+    await (await contract.connect(buyer).buyNight(2, { value: price })).wait();
+    await assert.rejects(contract.connect(hotel).releaseHappyNight(1), /reserved for pass holders/);
+  });
+
+  it("restores points and the rewards reserve after an approved protected primary refund", async () => {
+    await book();
+    await mint(date + day);
+    await (await contract.fundRewards({ value: price })).wait();
+    await (await contract.connect(hotel).depositHotelBond({ value: price })).wait();
+    await (await contract.connect(hotel).protectNight(2)).wait();
+    await advance(date);
+    await (await contract.connect(hotel).checkIn(1, traveler.address)).wait();
+    const points = await contract.pointBalance(traveler.address);
+    const net = price - points * await contract.POINT_VALUE();
+    await (await contract.connect(traveler).buyNightWithPoints(2, points, { value: net })).wait();
+    await advance(date + day);
+    await (await contract.connect(traveler).requestBondRefund(2)).wait();
+    await (await contract.resolveBondClaim(2, true)).wait();
+    assert.equal(await contract.pointBalance(traveler.address), points);
+    assert.equal(await contract.rewardsReserve(), price);
+    assert.equal(await contract.proceeds(traveler.address), net);
+    assert.equal(await contract.hotelBond(hotel.address), 0n);
+  });
+
 });

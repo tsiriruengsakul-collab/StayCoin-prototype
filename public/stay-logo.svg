@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <defs>
+    <linearGradient id="rim" x2="1" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#76f4ce"/><stop offset=".53" stop-color="#27cedf"/><stop offset="1" stop-color="#08a9f5"/>
+    </linearGradient>
+    <linearGradient id="letter" x1=".2" x2=".72" y1="1" y2=".47" gradientUnits="objectBoundingBox">
+      <stop stop-color="#04a8ea"/><stop offset=".58" stop-color="#1752a9"/><stop offset="1" stop-color="#1e2c88"/>
+    </linearGradient>
+  </defs>
+  <circle cx="60" cy="60" r="55.5" fill="#f8fbff" stroke="url(#rim)" stroke-width="7"/>
+  <path d="M15 50c3.2-15.9 12.2-25.5 26.8-32M78 18c14.6 6.4 23.7 17.2 27 32" fill="none" stroke="#60e8d5" stroke-width="2" stroke-linecap="round"/>
+  <path d="M42 52V30L26 37v20l4-4V40l12-5ZM78 52V30l16 7v20l-4-4V40l-12-5Z" fill="#1e2c88"/>
+  <path d="M45 49V28L60 20l15 8v21M44 28l16-8 16 8" fill="none" stroke="#1e2c88" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <g fill="#16b5f4">
+    <rect x="52.5" y="29" width="5.4" height="4.5" rx="1.3"/><rect x="62" y="29" width="5.4" height="4.5" rx="1.3"/>
+    <rect x="52.5" y="36" width="5.4" height="4.5" rx="1.3"/><rect x="62" y="36" width="5.4" height="4.5" rx="1.3"/>
+    <path d="M32 44q0-1 2-1.7l1.1-.5q1.1-.4 1.1 1v3q0 1-1.3 1.7l-1.5.6q-1.4.4-1.4-.8Zm5-2q0-1 2-1.7l.7-.3q1.3-.4 1.3.9v3.2q0 1-1.4 1.5l-1.4.5q-1.2.4-1.2-.9ZM32 51q0-1 2-1.7l1.1-.5q1.1-.4 1.1 1v2.4q0 1-1.3 1.7l-1.5.6q-1.4.4-1.4-.8Zm5-2q0-1 2-1.7l.7-.3q1.3-.4 1.3.9v2.5q0 1-1.4 1.5l-1.4.5q-1.2.4-1.2-.9Z"/>
+    <path d="M32 44q0-1 2-1.7l1.1-.5q1.1-.4 1.1 1v3q0 1-1.3 1.7l-1.5.6q-1.4.4-1.4-.8Zm5-2q0-1 2-1.7l.7-.3q1.3-.4 1.3.9v3.2q0 1-1.4 1.5l-1.4.5q-1.2.4-1.2-.9ZM32 51q0-1 2-1.7l1.1-.5q1.1-.4 1.1 1v2.4q0 1-1.3 1.7l-1.5.6q-1.4.4-1.4-.8Zm5-2q0-1 2-1.7l.7-.3q1.3-.4 1.3.9v2.5q0 1-1.4 1.5l-1.4.5q-1.2.4-1.2-.9Z" transform="translate(120) scale(-1 1)"/>
+  </g>
+  <path d="M55 48a5 5 0 0 1 10 0v8H55z" fill="#1e2c88"/>
+  <path d="M89 62C76 52 55 50 39 56c-12 4-13 14-4 19 9 5 21 5 32 10 12 5 6 13-4 14-13 2-25-9-35-8-6 1-13 5-15 9 12-4 21 3 29 6 16 7 37 5 45-4 10-11 4-22-14-28-10-3-25-3-25-10 0-8 24-7 37 3z" fill="url(#letter)"/>
+</svg>
