@@ -1,107 +1,69 @@
 # StayCoin hotel marketplace · Version 2
 
-The website uses the name in `src/brand.ts`. Edit `brand.websiteName` there to rename the header, footer, browser title, accessibility labels, and site metadata. STAY is the ERC-1155 Night Token symbol. Happy Pass is the seasonal accommodation product.
+Staypass is a Sepolia testnet hotel-booking demo. The site name lives in `src/brand.ts`. STAY is the website’s Night Token branding.
 
-## Run the website locally
+## Run locally
 
-1. Open this repository in VS Code. Open **Terminal → New Terminal** from the repository folder.
-2. Install Node.js 22.13 or later. Run these commands from the VS Code terminal.
+From the repository root, use Node.js 22.13 or newer.
 
-   ```sh
-   npm ci
-   npm run dev
-   ```
+```sh
+npm ci
+npm run dev
+npm test
+npm run build
+```
 
-3. Open the URL that Vite prints. Browse Explore, Resale, or Happy Pass. Use **Sign in → Continue in demo mode** to see sample bookings and a sample StayPoints balance. The **Hotel partner portal** link is in the footer. A V2 contract on Sepolia and a signed-in wallet enable test transactions.
-4. Run local verification in a second terminal.
+The website shows labeled examples while it lacks a verified Sepolia contract. Use **Sign in → Continue in demo mode** for a sample booking and StayPoints balance. The **Hotel partner portal** link is in the footer. Local Hardhat tests use simulated wallets. For a persistent local node, run `npm run chain` in one terminal and `npm run deploy:local` in another. The website accepts live transactions only on Sepolia.
 
-   ```sh
-   npm test
-   npm run build
-   ```
+## Which contract to deploy
 
-Hardhat uses the pinned Solidity compiler and an in-memory network for tests. For a persistent local development node, run `npm run chain` in one terminal and `npm run deploy:local` in another. That address is local only. The web app signs writes only on Sepolia.
+Deploy `contracts/StayCoinNightTokenV2.sol:StayCoinNightTokenV2`. This is the patched contract reviewed in [PR #1](https://github.com/tsiriruengsakul-collab/StayCoin-prototype/pull/1). The exact original upload is preserved at `contracts/remix/StayCoinNightTokenV2.sol` with SHA-256 `a13d7bf139dc6a4313c44a0ac1fe8aaeae9d6e11515aa4e56627d68dc8ddf80c`. Both are compiled and tested independently. The separate `StayCoinNightToken.sol` marketplace prototype has a different ABI.
 
-## Local tests for the uploaded Remix contract
+The patched candidate uses Bangkok midnight for the 20% daily mint cap. Primary sales, resale purchases, and resale quotes close at that midnight. Check-in is open through that Bangkok calendar day. Anyone can finalize expiry once the day ends. The owner role remains in place for fees and expired-bond settlement. The booking payments and percentages are unchanged from the Remix upload.
 
-`npm test -- test/StayCoinNightTokenV2.ts` runs the booking lifecycle on Hardhat’s simulated network. It deploys both compiled artifacts by fully qualified name.
+## Prepare and deploy through Remix and MetaMask
 
-- `contracts/remix/StayCoinNightTokenV2.sol:StayCoinNightTokenV2` is the exact uploaded source. Its SHA-256 is `a13d7bf139dc6a4313c44a0ac1fe8aaeae9d6e11515aa4e56627d68dc8ddf80c`.
-- `contracts/StayCoinNightTokenV2.sol:StayCoinNightTokenV2` adds a single Bangkok-midnight timestamp per inventory day, limits check-in to that day, and opens expiry after the day ends. Resale quotes close at the same cutoff as sales. The owner role remains in place for fee collection and bond settlement.
+1. On the reviewed integration branch, run `npm ci`, `npm test`, and `npm run prepare:sepolia`. The preparation command generates `deployment/StayCoinNightTokenV2.sol` and checks its compiled ABI, optimized runtime, and size against the Hardhat artifact. It uses the lockfile’s **Solidity 0.8.28**, **OpenZeppelin 5.4.0**, **optimizer enabled with 200 runs**, and **Cancun** EVM target. Both builds have a 13,665-byte runtime. The frontend verifies its executable fingerprint, ignoring Solidity’s build metadata trailer.
+2. In **MetaMask**, select **Sepolia** (chain ID `11155111`), then choose the account that should own the marketplace. Use faucet test ETH. Keep the recovery phrase and private keys inside MetaMask.
+3. In [Remix](https://remix.ethereum.org), create `StayCoinNightTokenV2.sol` and paste the generated file from the **deployment** folder. In **Solidity Compiler**, select **0.8.28**, enable **200 optimizer runs**, and choose **Cancun**. Compile, select **StayCoinNightTokenV2**, and open **Deploy & Run**.
+4. Select **Injected Provider / MetaMask**. Confirm the owner wallet and Sepolia in the wallet popup. Deploy with zero ETH value and no constructor arguments. Approve the transaction yourself in MetaMask.
+5. Wait for a successful receipt. Save the **contract address**, **deployment transaction hash**, and **deployment block number**. Open the hash on [Sepolia Etherscan](https://sepolia.etherscan.io) and check the success status and created address.
 
-The test sends exactly `0.001 ETH` for the initial purchase and `0.0015 ETH` for the resale. After check-in releases the 10% bond, it verifies gas-adjusted withdrawals of `0.000095 ETH` to the platform, `0.001075 ETH` to the hotel, and `0.00133 ETH` to the first traveler.
+## Configure a Vercel preview and verify the live flow
 
-The website and its deployment script still use the existing `StayCoinNightToken` contract. Run `npm test` to include that contract’s suite.
+1. In the existing **Vercel** project, open **Settings → Environment Variables**. For **Preview**, preferably scoped to the integration branch, set `VITE_STAYCOIN_CONTRACT_ADDRESS` to the public address from Remix. Set `VITE_STAYCOIN_DEPLOYMENT_BLOCK` to its public deployment block number to enable completed resale analytics, redeemed booking history, and expired-bond settlement history. The address is enough for the core lifecycle. Keep wallet credentials out of all environment variables.
+2. In **Deployments**, redeploy the integration branch’s **Preview**. Vite reads these variables at build time. For a local browser preview, copy `.env.example` to `.env.local`, set the same values, and restart Vite. Switch MetaMask to Sepolia. The banner shows **Verified Night Token V2** when the chain, bytecode, and ERC-1155 interface checks pass.
+3. **Register a hotel.** Sign in with the owner wallet. In the **Hotel partner portal**, approve a separate hotel wallet with **60 rooms**.
+4. **Mint.** Switch MetaMask accounts and sign in with the hotel wallet. Choose a Bangkok date after today and enter **0.001** test ETH. A 60-room hotel can mint 12 nights per date.
+5. **Book.** Sign in with Traveler A, open **Explore stays**, and buy the listing. Check the exact **0.001 test ETH** value in MetaMask before approving. Confirm the token appears in **My Bookings**.
+6. **Resell.** As Traveler A, list the booking for **0.0015 test ETH**. Sign in with Traveler B, open **Resale**, review the contract’s quote, and buy. Confirm the wallet shows **0.0015 test ETH** and the booking transfers to Traveler B. The quoted shares are **0.00133** to the seller, **0.000125** to the hotel, and **0.000045** to the platform.
+7. **Check in.** Use a separate token minted and purchased before its stay date. On that eligible Bangkok date, sign in as the issuing hotel. Confirm the guest wallet shown in **Your inventory** and select **Redeem at check-in**. Confirm the burn and the release of the 10% holdback to the hotel. Sepolia time advances in real time. Prepare a stay for the demo date in advance.
+8. **Withdraw.** In **My Bookings** or the **Hotel partner portal**, check available proceeds and select **Withdraw to wallet** on the account entitled to payment. For an unused stay, finalize expiry after its Bangkok day ends. The platform owner can then credit the held bond to the hotel or the last traveler after reviewing the outcome.
+9. **Verify receipts.** Open **Transaction activity** from the footer and follow the Sepolia Etherscan links for the actual transactions recorded by the current wallet in this browser. Check the success status, destination contract, payments, and ERC-1155 results. Keep a list of hashes as evidence of each successful public test.
+10. **Review publication.** Review the integration PR in GitHub. After you approve the changes and the live preview tests pass, set the same two public values for **Production** and merge the PR yourself. Vercel normally builds the production branch on merge. If it does not, redeploy that branch from **Deployments**. Keep the production settings and site untouched while testing the preview.
 
-## Version 2 features
+## Feature and test status
 
-- **Accounts.** Sign in with MetaMask by signing a message for this website. The browser keeps an eight-hour, tab-scoped session that follows the signed-in address. Demo mode uses a local session with sample data. The app uses no passwords or account server. Contract roles and wallet transaction signatures authorize all on-chain changes.
-- **StayPoints.** The hotel’s check-in awards one non-transferable point per `0.0001` test ETH paid by the current traveler. One point discounts `0.000001` test ETH, capped at 20% of an eligible primary booking and limited by a platform-funded rewards reserve. Points expire after 540 days of inactivity. The references use two different baht values for a point. These testnet constants do not set a commercial baht value.
-- **Happy Pass.** The platform creates a seasonal ERC-20 series for a 2–5-star tier. Hotels assigned to that tier commit dated nights, and the pass price must be at least 30% below each night’s posted price. Presales close at the season start and issuance is capped by committed nights. A holder can burn one pass to book an eligible night at any participating property in the series. The purchase stays in escrow until redemption, when the platform receives 5% and the hotel receives the rest. Holders can burn unused passes for a refund after the season ends. The class demo supports configurable dates.
-- **Hotel Bond.** A hotel can prefund collateral and assign protection to an unsold booking. It locks the original listed price. When a hotel cannot honor a booking, the current holder may file during the stay date or the following day. The platform owner reviews and can approve the lesser of the amount paid and the collateral. A pending claim can be collected by the holder seven days after the stay date if the platform owner has not decided. Successful check-in releases the collateral. Hotels can release unclaimed protection after the claim window. This testnet model uses optional prefunding and does not imply coverage of any resale markup.
-- **Resale pricing analytics.** The partner portal displays average completed resale price by stay date, completed sales, and gross resale volume for the signed-in property. Sample metrics and charts are labeled and use baht. Live metrics use confirmed Sepolia data and test ETH.
+| Feature | This integration |
+| --- | --- |
+| Night Tokens | Patched V2 ABI and full lifecycle tested locally. Live use requires a Sepolia deployment and wallet confirmation. V2 stores hotel wallet addresses and verified room counts. Hotel names, cities, and room descriptions on the sample cards are illustrative. |
+| Hotel Bond | The tested Night Token V2 holds 10% of the primary payment. Check-in credits it to the hotel. After expiry the platform owner can credit it to the last holder or hotel. This is partial, centralized protection. The separate locally tested prefunded-bond prototype remains outside this deployment. |
+| Resale analytics | Real V2 `Resold` events when the deployment block and RPC history are available. The sample dashboard uses illustrative baht data. |
+| StayPoints and Happy Pass | Implemented and tested locally in the separate marketplace prototype. Their website pages show labeled previews. The patched Night Token V2 contract has no points or pass methods. |
 
-## Deploy the tested contract to Sepolia
-
-1. Install MetaMask from its official site, show test networks, and select **Sepolia** (chain ID `11155111`). Use dedicated test accounts and obtain faucet ETH for gas and test purchases. No Mainnet funds are required.
-2. Produce a standalone source file for Remix from the same pinned Solidity and OpenZeppelin sources used in the tests.
-
-   ```sh
-   npx hardhat flatten contracts/StayCoinNightToken.sol > StayCoinNightToken.flat.sol
-   ```
-
-3. Open [Remix](https://remix.ethereum.org). Create a file called `StayCoinNightToken.flat.sol` there and paste the generated source into it. In **Solidity Compiler**, choose `0.8.28`, enable optimization with 200 runs, and select **Cancun** as the EVM version. Compile the file.
-4. Open **Deploy & Run Transactions**. Select **Injected Provider / MetaMask**, confirm that the wallet shows **Sepolia** and the intended platform account, then select **StayCoinNightToken** in the contract menu. Deploy with no constructor arguments and zero ETH value. Approve the transaction in MetaMask. Keep the wallet recovery phrase and private keys inside your wallet.
-5. After the receipt confirms, copy the new contract address. Verify the address and deployment hash on [Sepolia Etherscan](https://sepolia.etherscan.io). The deployment account becomes platform owner. Use the new V2 deployment address. Earlier Remix VM and V1 contract addresses do not provide the V2 features.
-6. To try it from the local UI, copy `.env.example` to `.env.local`, then set `VITE_STAYCOIN_CONTRACT_ADDRESS` to the address on Sepolia. Restart Vite and switch MetaMask to Sepolia. The address itself is public. Environment files holding secrets belong outside Git history.
-
-## Deploy the website to Vercel
-
-1. In Vercel, choose **Add New → Project** and import this existing GitHub repository.
-2. Use the Vite preset, repository root, and Node.js 22.x. The included `vercel.json` sets the install and build commands, output directory, and browser route rewrites.
-3. In Vercel’s environment settings, add `VITE_STAYCOIN_CONTRACT_ADDRESS` for Production and Preview as needed. Leave it empty to deploy the sample experience first.
-4. Deploy or redeploy after changing the address. Open the Vercel URL, try a direct link to `/dashboard`, and connect on Sepolia. Confirm that the banner shows **Sepolia** and that a freshly minted night appears in the marketplace.
-
-## Live presentation demo
-
-Prepare funded Sepolia accounts for the platform owner, hotel, Traveler A, and Traveler B. The owner and hotel can share a test account if you have limited faucet funds, but use separate accounts if you want to show each balance independently.
-
-**Before presentation day**, register a hotel in **Hotel Dashboard** as the owner. Switch to the hotel account, mint a night dated on presentation day, then purchase it with the account you will check in. Keep this booking ready. Sales and resales close at Bangkok midnight at the start of each stay date. Check-in is available during that Bangkok calendar day.
-
-**During the presentation**
-
-1. Connect the hotel wallet and mint a second night dated after presentation day. Use a demonstration primary price such as `0.002` test ETH.
-2. Switch to Traveler A and book it from **Explore stays**. The website reads the exact price from the contract and attaches it to the transaction.
-3. Under **My bookings**, list the night at `0.003` test ETH. Switch to Traveler B, open **Resale**, and buy it. The example allocates `0.00266` to the seller, `0.00025` to the hotel, and `0.00009` to the platform. Open Traveler B’s **My bookings** to show the transfer.
-4. Switch back to the hotel account and redeem the preparation-night booking at check-in. Show the ERC-1155 burn and the **Redeemed** status. Each booking ID can be redeemed only once.
-5. Open **Transaction activity** from the footer and follow the Etherscan links for this wallet’s confirmed transactions. Sign in again after switching wallets.
-6. Show **StayPoints** in the checked-in guest’s account. Fund the rewards reserve in **Hotel partner portal → Platform programs** and show the points discount on another primary stay.
-7. For **Happy Pass**, create a future series, assign the hotel to its tier, and commit a future night from the hotel inventory. Use `0.002` test ETH for the ordinary night and `0.0014` for the pass. As the traveler, buy a pass and book one of its committed nights.
-8. For **Hotel Bond**, first deposit test ETH as the hotel, protect an unsold night, and buy it as a traveler. Prepare a protected stay dated on presentation day to show the claim window. The platform owner can review the claim in the portal. Show its payout under **My Bookings → Available proceeds**.
-9. Return to the hotel portal as the selling hotel and show the completed resale chart from step 3.
-
-## Contract changes from the supplied Remix prototype
-
-- The platform owner registers a hotel once with a fixed room count. Each hotel may create up to `floor(rooms / 5)` unique booking units per Bangkok date, across room types. Each ID is a single room-night.
-- The contract checks the exact payment in wei. Primary revenue credits 5% to the platform. On resale, the platform gets 3% of the sale price and the hotel gets 25% of positive gain over the last price paid. Integer divisions round down to the nearest wei. The seller keeps the remainder.
-- Payouts are recorded as proceeds to withdraw, so transfer failures to recipients are isolated from sales. The marketplace blocks direct ERC-1155 transfers and checks sender, current holder, amount, and date in its business functions.
-- The issuing hotel verifies the guest at physical check-in. The contract confirms the current holder and burns the token once. Expired tokens are blocked from sale or redemption. They may remain visible as expired records.
-- The frontend checks for the V2 contract before showing live data.
-- The pilot reads inventory directly through MetaMask and tracks transaction activity in the browser. It uses test ETH. Thai-baht prices are illustrative. Hotels handle physical fulfillment outside the app.
+Run `npm test -- test/StayCoinNightTokenV2.ts test/SepoliaNightTokenIntegration.ts` for the uploaded contract, patched candidate, and frontend adapter. The full suite also covers the separate marketplace prototype. A successful local result or Vercel build is not a public-chain transaction. The testnet contract is an unaudited classroom demo. It relies on the issuing hotel for physical check-in and the platform owner for manual expired-bond settlement. Use Sepolia test ETH only.
 
 ## Figures to reconcile before presenting
 
 | Item | Presentation | Financial plan |
 | --- | --- | --- |
 | Revenue per hotel per year | ฿171,000 from three streams | ฿192,000 including ฿21,000 in Happy Pass commission |
-| Break-even | 88 hotels using revenue against ฿15M costs | About 108 hotels using contribution after variable costs, excluding hotel signup costs from the calculation |
+| Break-even | 88 hotels using revenue against ฿15M costs | About 108 hotels using contribution after variable costs, excluding hotel signup costs |
 | Year 3 profit | ฿81M labeled net profit | ฿61M before tax, ฿48.8M after tax |
 | StayPoints | ฿1 per point | ฿0.25 per point modeled |
-| Hotel Bond | Hotel posts funds before minting in the demo | 10% withheld per sale with no upfront payment |
+| Hotel Bond design | Hotel posts funds before minting in the demo | 10% held back per sale, released after checkout |
 | Pilot cities | Phuket and Chiang Mai | Phuket and Bangkok |
 | Independent hotel bookings via third-party sites | 80%+ | 63.4% in the stated 2025 dataset |
-
-The app uses the agreed booking and resale fee percentages. The optional prefunded bond and test ETH point schedule are V2 prototype rules. The commercial figures above remain open.
 
 ## Photography
 
@@ -111,7 +73,6 @@ Illustrative resort and room photography from Unsplash. The sample hotel names a
 - [Phuket sample](https://images.unsplash.com/photo-1571003123894-1f0594d2b5d9)
 - [Chiang Mai sample](https://images.unsplash.com/photo-1611892440504-42a792e24d32)
 - [Bangkok sample](https://images.unsplash.com/photo-1542314831-068cd1dbfeeb)
-
 - [Krabi sample](https://images.unsplash.com/photo-1566073771259-6a8506099945)
 - [Koh Samui sample](https://images.unsplash.com/photo-1571896349842-33c89424de2d)
 - [Ari sample](https://images.unsplash.com/photo-1566665797739-1674de7a421a)

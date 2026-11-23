@@ -10,6 +10,6 @@ export default defineConfig({
   solidity: {
     version: "0.8.28",
     path: require.resolve("solc/soljson.js"),
-    settings: { optimizer: { enabled: true, runs: 200 } },
+    settings: { evmVersion: "cancun", optimizer: { enabled: true, runs: 200 } },
   },
 });

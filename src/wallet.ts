@@ -25,7 +25,9 @@ const injected = () => {
 };
 
 export function useWallet() {
-  const [wallet, setWallet] = useState<InjectedWallet | null>(injected);
+  const [announcedWallet, setAnnouncedWallet] = useState<InjectedWallet | null>(null);
+  const [legacyWallet, setLegacyWallet] = useState<InjectedWallet | null>(injected);
+  const wallet = announcedWallet ?? legacyWallet;
   const [info, setInfo] = useState<WalletInfo>(disconnected);
   const [session, setSession] = useState(storedSession);
   const [error, setError] = useState("");
@@ -39,25 +41,48 @@ export function useWallet() {
   }, []);
 
   useEffect(() => {
-    const detect = () => setWallet(injected());
+    const detect = () => setLegacyWallet(injected());
+    const announce = (event: Event) => {
+      const candidate = (event as CustomEvent<{ info?: { rdns?: string }; provider?: InjectedWallet }>).detail;
+      if (candidate?.info?.rdns === "io.metamask" && candidate.provider) setAnnouncedWallet(candidate.provider);
+    };
+    window.addEventListener("eip6963:announceProvider", announce);
+    window.dispatchEvent(new Event("eip6963:requestProvider"));
     window.addEventListener("ethereum#initialized", detect);
-    return () => window.removeEventListener("ethereum#initialized", detect);
+    return () => {
+      window.removeEventListener("eip6963:announceProvider", announce);
+      window.removeEventListener("ethereum#initialized", detect);
+    };
   }, []);
 
   useEffect(() => {
     if (!wallet) return;
-    const update = () => { void sync(wallet).catch((err) => { setInfo(disconnected); setError(errorText(err)); }); };
-    const disconnect = () => { setInfo(disconnected); setSession(null); };
+    let active = true;
+    let revision = 0;
+    const update = () => {
+      const request = ++revision;
+      setInfo(disconnected);
+      void Promise.all([
+        wallet.request({ method: "eth_accounts" }) as Promise<string[]>,
+        wallet.request({ method: "eth_chainId" }) as Promise<string>,
+      ]).then(([accounts, chain]) => {
+        if (active && request === revision) setInfo({ address: accounts[0] ?? null, chain });
+      }).catch((err) => {
+        if (active && request === revision) setError(errorText(err));
+      });
+    };
+    const disconnect = () => { revision++; setInfo(disconnected); setSession(null); };
     update();
     wallet.on?.("accountsChanged", update);
     wallet.on?.("chainChanged", update);
     wallet.on?.("disconnect", disconnect);
     return () => {
+      active = false;
       wallet.removeListener?.("accountsChanged", update);
       wallet.removeListener?.("chainChanged", update);
       wallet.removeListener?.("disconnect", disconnect);
     };
-  }, [wallet, sync]);
+  }, [wallet]);
 
   useEffect(() => {
     try {
@@ -72,7 +97,7 @@ export function useWallet() {
   const signIn = async () => {
     const active = wallet ?? injected();
     if (!active) { setError("Install or open MetaMask to connect a wallet."); return; }
-    setWallet(active);
+    if (!wallet) setLegacyWallet(active);
     setBusy(true);
     setError("");
     try {
@@ -111,9 +136,9 @@ export function useWallet() {
     finally { setBusy(false); }
   };
 
-  const provider = useCallback(() => {
+  const provider = useCallback((fixedSepolia = false) => {
     if (!wallet) throw new Error("Connect MetaMask first.");
-    return new BrowserProvider(wallet, "any");
+    return new BrowserProvider(wallet, fixedSepolia ? sepolia.id : "any");
   }, [wallet]);
 
   const valid = Boolean(session && session.expires > Date.now());

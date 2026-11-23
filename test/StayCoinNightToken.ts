@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, it } from "mocha";
 import { network } from "hardhat";
 import { Contract, parseEther } from "ethers";
-import { nightTokenAbi, dateKey, bookingDate, readMarket, resaleSplit } from "../src/chain.js";
+import { dateKey, bookingDate, resaleSplit } from "../src/chain.js";
 
 const price = parseEther("0.002");
 const ask = parseEther("0.003");
@@ -189,14 +189,11 @@ describe("StayCoin Night Token", function () {
     assert.equal(await contract.proceeds(hotel.address), 0n);
     await assert.rejects(contract.connect(hotel).withdrawProceeds(hotel.address), /No proceeds/);
   });
-  it("reads the local contract through the frontend ABI and verifies the on-chain resale quote", async () => {
+  it("reads the original marketplace artifact and verifies the on-chain resale split", async () => {
     await book();
-    const web = new Contract(await contract.getAddress(), nightTokenAbi, ethers.provider);
-    const block = await ethers.provider.getBlock("latest");
-    assert.ok(block);
-    const snapshot = await readMarket(web, traveler.address, block.number);
-    const night = snapshot.nights[0];
-    assert.equal(night.property.name, "Demo Tide House");
+    const web = new Contract(await contract.getAddress(), contract.interface, ethers.provider);
+    const night = await web.nights(1);
+    assert.equal((await web.hotels(night.hotel)).name, "Demo Tide House");
     assert.equal(night.holder, traveler.address);
     assert.equal(night.originalPrice, price);
     assert.equal(bookingDate(dateKey(night.stayDate)), BigInt(date));
@@ -276,12 +273,8 @@ describe("StayCoin Night Token", function () {
     assert.equal(await contract.proceeds(outsider.address), passPrice * 95n / 100n);
     assert.equal(await contract.proceeds(owner.address), passPrice / 20n);
     await assert.rejects(contract.connect(buyer).redeemHappyPass(1, 2), /Night unavailable/);
-    const block = await ethers.provider.getBlock("latest");
-    assert.ok(block);
-    const web = new Contract(await contract.getAddress(), nightTokenAbi, ethers.provider);
-    const market = await readMarket(web, buyer.address, block.number);
-    assert.equal(market.passes[0].balance, 1n);
-    assert.equal(market.nights[1].passId, 1n);
+    assert.equal(await token.balanceOf(buyer.address), 1n);
+    assert.equal(await contract.passForNight(2), 1n);
   });
 
   it("enforces season, tier and pricing rules for committed inventory", async () => {
