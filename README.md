@@ -1,6 +1,6 @@
 # StayCoin hotel marketplace · Version 2
 
-Staypass is a Sepolia testnet hotel-booking demo. The site name lives in `src/brand.ts`. STAY is the website’s Night Token branding.
+Staycoin is a Sepolia testnet hotel-booking demo. The site name lives in `src/brand.ts`. STAY is the website’s Night Token branding.
 
 ## Run locally
 
