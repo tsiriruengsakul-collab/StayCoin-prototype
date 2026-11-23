@@ -1,8 +1,8 @@
 import { useRef, useState, type FormEvent } from "react";
-import { BedDouble, CalendarDays, ChevronDown, MapPin, Search, ShieldCheck, SlidersHorizontal, Ticket, Waves, Wallet } from "lucide-react";
+import { BedDouble, CalendarDays, ChevronDown, MapPin, Search, SlidersHorizontal, Ticket, Waves, Wallet } from "lucide-react";
 import { brand } from "./brand";
 import { signInLink } from "./Account";
-import { contractAddress, dateKey, displayDay, POINT_VALUE, sameAddress, testEth, type Night } from "./chain";
+import { buyPrimaryNight, canBuyNight, contractAddress, dateKey, displayDay, hotelLabel, invalidAddress, sameAddress, sepolia, testEth, type Night } from "./chain";
 import { baht, sampleHotels, today } from "./demo";
 import type { Market } from "./useMarket";
 
@@ -30,9 +30,8 @@ export function Marketplace({ market }: { market: Market }) {
       && (!filters.checkIn || day >= filters.checkIn) && (!filters.checkOut || day < filters.checkOut);
   };
   const demo = sampleHotels.filter((item) => match(item.name, item.city, item.date));
-  const nights = market.synced?.data.nights.filter((night) => night.lastPaidPrice === 0n && night.passId === 0n
-    && night.stayDate > market.synced!.blockTime
-    && match(night.property.name, night.property.city, dateKey(night.stayDate))) ?? [];
+  const nights = market.synced?.data.nights.filter((night) => canBuyNight(night, market.synced!.blockTime)
+    && match(hotelLabel(night.hotel), night.hotel, dateKey(night.stayDate))) ?? [];
   if (sort === "lowest") {
     demo.sort((a, b) => a.price - b.price);
     nights.sort((a, b) => a.originalPrice < b.originalPrice ? -1 : Number(a.originalPrice > b.originalPrice));
@@ -66,7 +65,7 @@ export function Marketplace({ market }: { market: Market }) {
       <form onSubmit={search} className="search-box" aria-label="Search hotels">
         <label className="search-field"><MapPin size={22} /><span><strong>Destination</strong><input
           value={input.destination} onChange={(event) => setInput({ ...input, destination: event.target.value })}
-          placeholder="City or hotel name" /></span></label>
+          placeholder={live ? "Hotel wallet address" : "City or hotel name"} /></span></label>
         <label className="search-field"><CalendarDays size={21} /><span><strong>Check-in from</strong><input type="date"
           min={today()} value={input.checkIn} onChange={(event) => setInput({ ...input, checkIn: event.target.value })} /></span></label>
         <label className="search-field"><CalendarDays size={21} /><span><strong>Check-out by</strong><input type="date"
@@ -79,7 +78,7 @@ export function Marketplace({ market }: { market: Market }) {
     <section ref={results} className="shell market-results" aria-label="Hotel search results">
       <div className="section-heading">
         <div><h2>{live ? "Available on Sepolia" : "Find your next stay"}</h2>
-          <p>{live ? "Live booking inventory · prices in test ETH" : "Sample hotel inventory · illustrated prices in Thai baht"}</p></div>
+          <p>{live ? "On-chain inventory · hotels shown by wallet address · test ETH" : "Sample hotel inventory · illustrated prices in Thai baht"}</p></div>
         <div className="sort"><SlidersHorizontal size={16} /><label><span className="sr-only">Sort by</span>
           <select value={sort} onChange={(event) => setSort(event.target.value)}>
             <option value="featured">Featured</option><option value="lowest">Lowest price</option><option value="soonest">Earliest date</option>
@@ -93,7 +92,7 @@ export function Marketplace({ market }: { market: Market }) {
         <p>Plans changed? List an eligible {brand.tokenSymbol} booking on the resale marketplace and set your own asking price.</p></div>
         <a className="button secondary" href="/resale">Explore resale</a></div>
       <div className="flex-tip"><span className="tile-icon"><CalendarDays size={22} /></span><div><h3>{brand.seasonalPass}</h3>
-        <p>Save on a seasonal night and choose a date at a participating hotel.</p></div><a className="button secondary" href="/happy-pass">See seasonal stays</a></div>
+        <p>Explore sample seasonal passes and partner destinations.</p></div><a className="button secondary" href="/happy-pass">See seasonal stays</a></div>
     </section>
   </>;
 }
@@ -114,29 +113,14 @@ export function DemoCard({ item }: { item: typeof sampleHotels[number] }) {
 }
 
 export function NightCard({ night, market }: { night: Night; market: Market }) {
-  const [applyPoints, setApplyPoints] = useState(false);
   const own = sameAddress(night.hotel, market.wallet.address);
-  const data = market.synced?.data;
-  const limits = [data?.points ?? 0n, night.originalPrice / 5n / POINT_VALUE, (data?.rewards ?? 0n) / POINT_VALUE];
-  const points = market.wallet.signedIn ? limits.reduce((smallest, value) => smallest < value ? smallest : value) : 0n;
-  const usePoints = applyPoints && points > 0n;
-  const buy = () => market.run("Book night #" + night.id, async (contract) => {
-    const fresh = await contract.nights(night.id);
-    if (fresh.lastPaidPrice !== 0n || await contract.passForNight(night.id) > 0n) {
-      throw new Error("This night is no longer available for primary purchase.");
-    }
-    return usePoints
-      ? contract.buyNightWithPoints(night.id, points, { value: fresh.originalPrice - points * POINT_VALUE })
-      : contract.buyNight(night.id, { value: fresh.originalPrice });
-  });
+  const buy = () => market.run("Book night #" + night.id, (contract) => buyPrimaryNight(contract, night.id));
   return <article className="hotel-card"><div className="hotel-image chain-image"><BedDouble size={48} /><span>Night #{night.id}</span></div>
-    <div className="hotel-body"><p className="eyeline"><MapPin size={15} /> {night.property.city}</p>
-      <h3>{night.property.name}</h3><p className="card-meta"><BedDouble size={16} /> {night.roomType}</p>
-      <p className="card-meta"><CalendarDays size={16} /> {displayDay(dateKey(night.stayDate))}</p>
-      {night.coverage > 0n && <p className="card-meta"><ShieldCheck size={16} /> Bond cover up to {testEth(night.coverage)}</p>}
-      {points > 0n && !own && <label className="rewards-check"><input type="checkbox" checked={applyPoints}
-        onChange={(event) => setApplyPoints(event.target.checked)} /> Apply {String(points)} StayPoints</label>}
-      <div className="card-bottom"><span><strong>{testEth(night.originalPrice - (usePoints ? points * POINT_VALUE : 0n))}</strong></span>
+    <div className="hotel-body"><p className="eyeline"><MapPin size={15} /> Sepolia hotel inventory</p>
+      <h3>{hotelLabel(night.hotel)}</h3><p className="card-meta"><BedDouble size={16} /> Night Token</p>
+      <p className="card-meta"><CalendarDays size={16} /> {displayDay(dateKey(night.stayDate))} · Bangkok</p>
+      <a className="contract-link" href={sepolia.explorer + "/address/" + night.hotel} target="_blank" rel="noreferrer">Hotel wallet on Etherscan</a>
+      <div className="card-bottom"><span><strong>{testEth(night.originalPrice)}</strong></span>
         {!market.wallet.signedIn ? <a className="button compact" href={signInLink("/")}>Sign in to book</a>
           : <button className="button compact" disabled={!market.canWrite || market.busy || own} onClick={() => void buy()}>{own ? "Your inventory" : "Book stay"}</button>}</div>
     </div></article>;
@@ -145,8 +129,10 @@ export function NightCard({ night, market }: { night: Night; market: Market }) {
 export function WalletGate({ market }: { market: Market }) {
   const ready = market.wallet.ready;
   return <div className="empty"><Wallet size={29} /><h3>{!contractAddress ? "Demo mode" : ready ? "Sepolia inventory unavailable" : "Switch to Sepolia"}</h3>
-    <p>{!contractAddress ? "On-chain actions will be available when the Sepolia Version 2 contract is configured."
-      : ready ? "The marketplace is loading or the deployment is unavailable." : "Use Sepolia in MetaMask to load your on-chain information."}</p>
+    <p>{invalidAddress ? "Enter a valid patched V2 Sepolia contract address in VITE_STAYCOIN_CONTRACT_ADDRESS."
+      : !contractAddress ? "Set VITE_STAYCOIN_CONTRACT_ADDRESS to the patched V2 contract address on Sepolia."
+      : ready ? market.marketError || "Verifying the patched V2 contract and loading Sepolia inventory."
+      : "Use Sepolia in MetaMask to load your on-chain information."}</p>
     {contractAddress && !ready && market.wallet.signedIn && <button className="button secondary" disabled={market.wallet.busy}
       onClick={() => void market.wallet.switchNetwork()}>Switch to Sepolia</button>}
   </div>;

@@ -11,3 +11,5 @@ typechain-types/
 .DS_Store
 
 StayCoinNightToken.flat.sol
+
+/deployment/

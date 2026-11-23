@@ -1,10 +1,10 @@
 import { useState, type FormEvent } from "react";
 import { Building2, CalendarDays, ExternalLink, Hotel, KeyRound, Repeat2 } from "lucide-react";
-import { getAddress, parseEther } from "ethers";
-import { bookingDate, dateKey, displayDay, resaleSplit, sameAddress, sepolia, shortAddress, testEth, type Night } from "./chain";
-import { baht, demoResale, today, sampleHotels } from "./demo";
+import { getAddress } from "ethers";
+import { buyResaleNight, canResell, dateKey, DAY, displayDay, futureStayDate, hotelLabel, priceInWei, resaleSplit, sameAddress, sepolia, shortAddress, testEth, type Night } from "./chain";
+import { baht, demoResale, sampleHotels } from "./demo";
 import { AccountGate, signInLink } from "./Account";
-import { BondPanel, ClaimReview, GuestBond, HotelNightActions, PartnerOverview, PassAdmin } from "./PartnerTools";
+import { BondStatus, ExpireNight, ExpiredBonds, PartnerOverview } from "./PartnerTools";
 import { Empty, PageIntro, WalletGate } from "./Marketplace";
 import type { Market } from "./useMarket";
 
@@ -17,33 +17,35 @@ const minWei = "0.000000000000000001";
 
 function BookingHeading({ night }: { night: Night }) {
   return <div className="booking-heading"><span className="tile-icon"><KeyRound size={21} /></span><div>
-    <h3>{night.property.name}</h3>
-    <p>#{night.id} · {night.roomType} · {night.property.city} · {displayDay(dateKey(night.stayDate))}</p>
+    <h3>{hotelLabel(night.hotel)}</h3>
+    <p>#{night.id} · Night Token · {displayDay(dateKey(night.stayDate))} · Bangkok</p>
   </div></div>;
 }
 
 function ListingForm({ night, market }: { night: Night; market: Market }) {
   const [price, setPrice] = useState("");
   let quote: ReturnType<typeof resaleSplit> | undefined;
-  try { if (price && parseEther(price) > 0n) quote = resaleSplit(parseEther(price), night.lastPaidPrice); } catch { /* Wait for a valid price. */ }
+  try { if (price) quote = resaleSplit(priceInWei(price), night.lastPaidPrice); } catch { /* Wait for a valid price. */ }
   return <form className="form-row" onSubmit={(event) => {
     event.preventDefault();
-    if (quote) void market.run("List night #" + night.id, (contract) => contract.listForResale(night.id, parseEther(price)));
+    if (quote) void market.run("List night #" + night.id, (contract) => contract.listForResale(night.id, priceInWei(price)));
   }}>
     <label>Asking price in test ETH<input type="number" min={minWei} step="any" value={price} required
-      onChange={(event) => setPrice(event.target.value)} placeholder="0.003" /></label>
+      onChange={(event) => setPrice(event.target.value)} placeholder="0.0015" /></label>
     <button className="button compact" disabled={!market.canWrite || market.busy || !quote}>
       {night.listingPrice ? "Update listing" : "List for resale"}</button>
     {Boolean(night.listingPrice) && <button type="button" className="button secondary compact" disabled={!market.canWrite || market.busy}
       onClick={() => void market.run("Cancel listing #" + night.id, (contract) => contract.cancelListing(night.id))}>Cancel listing</button>}
-    {quote && <p className="inline-note">Seller {testEth(quote.seller)} · Hotel {testEth(quote.hotel)} · Platform {testEth(quote.platform)}</p>}
+    {quote && <p className="inline-note">Estimated split · Seller {testEth(quote.seller)} · Hotel {testEth(quote.hotel)} · Platform {testEth(quote.platform)}</p>}
   </form>;
 }
 
 export function MyBookings({ market }: { market: Market }) {
   const blockTime = market.synced?.blockTime;
-  const bookings = market.synced?.data.nights.filter((night) => night.lastPaidPrice > 0n
-    && sameAddress(night.holder, market.wallet.address)) ?? [];
+  const bookings = market.synced?.data.nights.filter((night) => night.sold && (
+      sameAddress(night.holder, market.wallet.address) || sameAddress(night.expiredHolder, market.wallet.address)
+      || sameAddress(market.history?.checkedIn.get(night.id) ?? null, market.wallet.address)
+    )) ?? [];
   const { wallet } = market;
   return <section className="shell content-page">
     <PageIntro title="My bookings" description="See stays held by your wallet, check their status, and list eligible bookings for resale." />
@@ -51,28 +53,32 @@ export function MyBookings({ market }: { market: Market }) {
         <span className="tile-icon"><KeyRound size={22} /></span><div><h3>{sampleHotels[0].name}</h3>
         <p>{sampleHotels[0].city} · {sampleHotels[0].room} · {displayDay(sampleHotels[0].date)}</p></div></div>
         <span className="pill">Sample booking</span></div><p className="inline-note">In a wallet account, eligible stays can be listed for resale or presented at check-in.</p></article>
-      : !wallet.signedIn ? <AccountGate path="/bookings" detail="Sign in to view your bookings, manage listings, and see bond claims." />
+      : !wallet.signedIn ? <AccountGate path="/bookings" detail="Sign in to view your bookings, manage listings, and check held bonds." />
       : blockTime === undefined ? <WalletGate market={market} />
       : bookings.length === 0 ? <Empty title="No bookings in this wallet" detail="A confirmed booking will appear here after a purchase." />
       : <div className="panel-list">{bookings.map((night) => {
-        const eligible = !night.redeemed && night.stayDate > blockTime;
-        const status = night.claim === 3n ? "Refunded" : night.claim === 1n ? "Claim pending" : night.redeemed ? "Redeemed" : eligible ? (night.listingPrice ? "Listed" : "Booked")
-          : blockTime < night.stayDate + 86400n ? "Check-in today" : "Expired";
+        const eligible = canResell(night, blockTime);
+        const status = night.redeemed ? "Redeemed" : night.expired ? "Expired · token burned" : eligible ? (night.listingPrice ? "Listed" : "Booked")
+          : blockTime < night.stayDate + DAY ? "Check-in today" : "Awaiting expiry";
         return <article className="panel" key={night.id}><div className="row-between">
           <BookingHeading night={night} /><span className="pill">{status}</span></div>
           <p className="panel-meta">Paid {testEth(night.lastPaidPrice)}{eligible && night.listingPrice > 0n && " · Asking " + testEth(night.listingPrice)}</p>
           {eligible && <ListingForm night={night} market={market} />}
-          <GuestBond night={night} market={market} />
+          <BondStatus night={night} market={market} />
+          <ExpireNight night={night} market={market} />
         </article>;
       })}</div>}
-    {market.synced && wallet.signedIn && <Proceeds market={market} />}
+    {market.synced && wallet.signedIn && <>
+      {!market.history && <p className="inline-note">Checked-in booking history appears when Sepolia event history is available.</p>}
+      <Proceeds market={market} />
+    </>}
   </section>;
 }
 
 export function Resale({ market }: { market: Market }) {
   const blockTime = market.wallet.isDemo ? undefined : market.synced?.blockTime;
   const listings = market.synced?.data.nights.filter((night) =>
-    night.listingPrice > 0n && !night.redeemed && blockTime !== undefined && night.stayDate > blockTime) ?? [];
+    night.quote && blockTime !== undefined && canResell(night, blockTime)) ?? [];
   const demo = resaleSplit(BigInt(demoResale.price), BigInt(demoResale.previousPrice));
   return <section className="shell content-page">
     <PageIntro title="Resale marketplace" description="Take over an eligible booking from another traveler. See the price and payout split before you buy." />
@@ -89,8 +95,9 @@ export function Resale({ market }: { market: Market }) {
       {!market.wallet.signedIn && !market.wallet.isDemo && <a href={signInLink("/resale")} className="button secondary">Sign in to buy or resell</a>}
     </article> : listings.length === 0 ? <Empty title="No active resale listings" detail="Listed bookings appear here until they sell or reach the stay date." />
       : <div className="panel-list">{listings.map((night) => {
-        const split = resaleSplit(night.listingPrice, night.lastPaidPrice);
-        const own = sameAddress(night.holder, market.wallet.address);
+        const split = night.quote!;
+        const own = sameAddress(night.listingSeller, market.wallet.address);
+        const issuingHotel = sameAddress(night.hotel, market.wallet.address);
         return <article className="panel" key={night.id}><div className="row-between"><BookingHeading night={night} /><span className="pill">Active listing</span></div>
           <div className="split-grid">
             <div><span>Buyer pays</span><strong>{testEth(night.listingPrice)}</strong></div>
@@ -98,15 +105,12 @@ export function Resale({ market }: { market: Market }) {
             <div><span>Hotel receives</span><strong>{testEth(split.hotel)}</strong></div>
             <div><span>Platform fee</span><strong>{testEth(split.platform)}</strong></div>
           </div>
-          {night.coverage > 0n && <p className="inline-note">Hotel Bond cover up to {testEth(night.coverage < night.listingPrice ? night.coverage : night.listingPrice)}.</p>}
+          <BondStatus night={night} market={market} />
           {!market.wallet.signedIn ? <a href={signInLink("/resale")} className="button">Sign in to buy</a>
-            : <button className="button" disabled={!market.canWrite || market.busy || own} onClick={() => void market.run("Buy resale #" + night.id, async (contract) => {
-            const fresh = await contract.nights(night.id);
-            if (fresh.listingPrice !== night.listingPrice || !sameAddress(fresh.holder, night.holder)) {
-              throw new Error("This listing changed. Review the updated price before buying.");
-            }
-            return contract.buyResale(night.id, fresh.holder, { value: fresh.listingPrice });
-          })}>{own ? "Your listing" : "Buy resale"}</button>}
+            : <button className="button" disabled={!market.canWrite || market.busy || own || issuingHotel}
+              onClick={() => void market.run("Buy resale #" + night.id, (contract) => buyResaleNight(contract, night))}
+              >{own ? "Your listing" : issuingHotel ? "Your hotel’s listing" : "Buy resale"}</button>}
+
         </article>;
       })}</div>}
   </section>;
@@ -114,17 +118,17 @@ export function Resale({ market }: { market: Market }) {
 
 function Proceeds({ market }: { market: Market }) {
   const amount = market.synced?.data.proceeds ?? 0n;
-  const address = market.wallet.address;
   return <article className="panel proceeds"><div><h3>Available proceeds</h3><p>{testEth(amount)}</p></div>
     <button className="button secondary" disabled={!amount || !market.canWrite || market.busy}
-      onClick={() => address && void market.run("Withdraw proceeds", (contract) => contract.withdrawProceeds(address))}>Withdraw to wallet</button>
+      onClick={() => void market.run("Withdraw proceeds", (contract) => contract.withdraw())}>Withdraw to wallet</button>
   </article>;
 }
 
 export function Dashboard({ market }: { market: Market }) {
   const data = market.synced?.data;
   const address = market.wallet.address;
-  const registered = Boolean(data?.hotel?.rooms);
+  const registered = Boolean(data?.hotel?.verifiedRooms);
+  const approved = Boolean(data?.hotel?.approved);
   const isAdmin = sameAddress(data?.owner ?? null, address);
   const timestamp = market.synced?.blockTime ?? 0n;
   const signedIn = market.wallet.signedIn;
@@ -138,52 +142,52 @@ export function Dashboard({ market }: { market: Market }) {
       <Building2 size={52} strokeWidth={1.4} aria-hidden="true" /></div>
     {!signedIn && !market.wallet.isDemo && <AccountGate path="/dashboard" detail="Sign in with your registered hotel or platform wallet to manage live inventory." />}
     {market.wallet.isDemo && <p className="inline-note portal-demo-note">You’re viewing the sample partner dashboard. Sign in with a registered hotel wallet to make changes on Sepolia.</p>}
-    <PartnerOverview inventory={visible ? inventory : []} timestamp={timestamp} preview={!visible} />
+    <PartnerOverview inventory={visible ? inventory : []} timestamp={timestamp} history={market.history} historyError={market.historyError} preview={!visible} />
     {signedIn && (!data || !address) ? <WalletGate market={market} /> : signedIn && data && address && <>
       <div className="dashboard-grid">
-        {isAdmin && <article className="panel"><h3>Register a hotel</h3><p>Platform owner controls enrollment and the fixed room count.</p>
+        {isAdmin && <article className="panel"><h3>Register a hotel</h3><p>The platform owner approves a hotel wallet and its verified room count.</p>
           <form className="stack-form" onSubmit={(event) => {
             const form = submit(event);
-            void market.run("Register hotel", (contract) => contract.registerHotel(getAddress(field(form, "wallet")),
-              field(form, "hotel"), field(form, "city"), Number(field(form, "rooms"))));
+            void market.run("Register hotel", (contract) => contract.registerHotel(getAddress(field(form, "wallet")), BigInt(field(form, "rooms"))));
           }}>
             <label>Hotel wallet address<input name="wallet" required placeholder="0x…" /></label>
-            <label>Hotel name<input name="hotel" required maxLength={80} placeholder="Demo Beach Hotel" /></label>
-            <label>City<input name="city" required maxLength={48} placeholder="Phuket" /></label>
-            <label>Total rooms<input name="rooms" type="number" required min={5} max={4294967295} step={1} placeholder="60" /></label>
+            <label>Total rooms<input name="rooms" type="number" required min={5} step={1} placeholder="60" /></label>
             <button className="button" disabled={!market.canWrite || market.busy}>Register hotel</button>
           </form></article>}
-        {registered && <article className="panel"><h3>Mint a night</h3>
-          <p>{data.hotel?.name} · {String((data.hotel?.rooms ?? 0n) / 5n)} tokenizable nights per stay date</p>
+        {approved && <article className="panel"><h3>Mint a night</h3>
+          <p>{hotelLabel(address)} · {String((data.hotel?.verifiedRooms ?? 0n) / 5n)} tokenizable nights per stay date</p>
           <form className="stack-form" onSubmit={(event) => {
             const form = submit(event);
-            void market.run("Mint night token", (contract) => contract.createNight(bookingDate(field(form, "date")),
-              field(form, "room"), parseEther(field(form, "price"))));
+            void market.run("Mint night token", (contract) => contract.createNight(futureStayDate(field(form, "date"), timestamp),
+              data.hotel!.verifiedRooms, priceInWei(field(form, "price"))));
           }}>
-            <label>Stay date (Bangkok time)<input name="date" type="date" min={today()} required /></label>
-            <label>Room type<input name="room" required maxLength={64} placeholder="Ocean-view king" /></label>
-            <label>Primary price in test ETH<input name="price" type="number" min={minWei} step="any" required placeholder="0.002" /></label>
+            <label>Stay date (Bangkok time)<input name="date" type="date" min={dateKey(timestamp + DAY)} required /></label>
+            <label>Primary price in test ETH<input name="price" type="number" min={minWei} step="any" required placeholder="0.001" /></label>
             <button className="button" disabled={!market.canWrite || market.busy}>Mint night</button>
           </form></article>}
-        {registered && <BondPanel market={market} />}
-        {isAdmin && <PassAdmin market={market} />}
+        {registered && <article className="panel"><h3>Hotel Bond</h3>
+          <p>V2 holds 10% from the primary purchase. Check-in credits it to your proceeds. The platform owner can settle a held bond after expiry.</p>
+          <p className="panel-meta">Held across your bookings · {testEth(inventory.reduce((total, night) => total + night.bond, 0n))}</p>
+        </article>}
       </div>
-      {isAdmin && <ClaimReview market={market} />}
+      {isAdmin && <ExpiredBonds market={market} />}
+      {registered && !approved && <p className="inline-note">Hotel approval is suspended. Existing bookings can still check in.</p>}
       {!isAdmin && !registered && <Empty title="This wallet is not registered as a hotel" detail="Ask the platform owner to register the hotel wallet." />}
       {(isAdmin || registered) && <Proceeds market={market} />}
       {registered && <div className="inventory">
         <h2><Hotel size={24} /> Your inventory</h2>
         {inventory.length === 0 ? <Empty title="No nights minted" detail="Mint the first night using the form above." />
           : <div className="panel-list">{inventory.map((night) => {
-            const isCheckInDay = timestamp >= night.stayDate && timestamp < night.stayDate + 86400n;
-            const canCheckIn = !night.redeemed && night.claim !== 1n && night.lastPaidPrice > 0n && isCheckInDay;
-            const label = night.claim === 3n ? "Refunded" : night.claim === 1n ? "Claim pending" : night.redeemed ? "Redeemed" : timestamp >= night.stayDate + 86400n ? "Expired"
-              : night.lastPaidPrice > 0n ? (isCheckInDay ? "Check-in open" : "Booked") : timestamp >= night.stayDate ? "Sales closed" : night.passId ? "Seasonal inventory" : "Available";
+            const isCheckInDay = timestamp >= night.stayDate && timestamp < night.stayDate + DAY;
+            const canCheckIn = !night.redeemed && !night.expired && night.sold && isCheckInDay;
+            const label = night.redeemed ? "Redeemed" : night.expired ? "Expired · token burned" : timestamp >= night.stayDate + DAY ? "Awaiting expiry"
+              : night.sold ? (isCheckInDay ? "Check-in open" : "Booked") : timestamp >= night.stayDate ? "Sales closed" : "Available";
             return <article className="panel" key={night.id}><div className="row-between"><BookingHeading night={night} /><span className="pill">{label}</span></div>
-              {night.lastPaidPrice > 0n && <p className="panel-meta">Traveler <code>{night.holder}</code></p>}
+              {night.sold && !night.redeemed && !night.expired && <p className="panel-meta">Traveler <code>{night.holder}</code></p>}
               {canCheckIn && <button className="button compact" disabled={!market.canWrite || market.busy}
                 onClick={() => { if (window.confirm("Confirm you have verified the traveler at the property. This burns their booking.")) void checkIn(night); }}>Redeem at check-in</button>}
-              <HotelNightActions night={night} market={market} />
+              <BondStatus night={night} market={market} />
+              <ExpireNight night={night} market={market} />
             </article>;
           })}</div>}
       </div>}

@@ -62,9 +62,9 @@ function App() {
   const latest = wallet.signedIn ? market.activity.find((item) => item.account.toLowerCase() === wallet.address?.toLowerCase()) : undefined;
   const portal = route?.path === "/dashboard";
   const live = Boolean(market.synced && !wallet.isDemo);
-  let message = "Sample inventory is for demonstration. Live bookings require a Sepolia deployment.";
+  let message = "Set VITE_STAYCOIN_CONTRACT_ADDRESS to the patched V2 address on Sepolia. Sample inventory is shown.";
   if (wallet.isDemo) message = "Demo account · sample inventory and example balances only.";
-  else if (invalidAddress) message = "The configured address is invalid. Sample inventory is shown.";
+  else if (invalidAddress) message = "VITE_STAYCOIN_CONTRACT_ADDRESS must be a valid nonzero Ethereum address. Sample inventory is shown.";
   else if (contractAddress && !wallet.ready) message = "Use MetaMask on Sepolia to load live inventory. Sample inventory is shown.";
   else if (market.marketError) message = market.marketError + " Sample inventory is shown.";
   else if (contractAddress) message = "Loading live Sepolia inventory. Sample inventory is shown until it is available.";
@@ -87,7 +87,7 @@ function App() {
     </header>
     <div className="shell notices">
       <div className="status-strip" role="status"><span className={live ? "badge live" : "badge"}>{live ? "SEPOLIA" : "DEMO MODE"}</span>
-        <span>{live ? "Transactions use test ETH on Sepolia." : message}</span></div>
+        <span>{live ? "Verified Night Token V2 · Transactions use Sepolia test ETH." : message}</span></div>
       {wallet.signedIn && !wallet.ready && <div className="status-strip transaction-strip" role="status">
         <span>Switch to Sepolia for live test transactions.</span><button className="button secondary compact" disabled={wallet.busy}
           onClick={() => void wallet.switchNetwork()}>Switch network</button></div>}
