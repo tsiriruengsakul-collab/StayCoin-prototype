@@ -143,6 +143,26 @@ export type BookingHistory = {
   resales: Map<number, { sales: bigint; volume: bigint }>;
   checkedIn: Map<number, string>;
 };
+
+export function walletPaymentReceipts(purchases: PaymentReceipt[], address: string | null) {
+  type WalletReceipt = { purchase: PaymentReceipt; resale?: PaymentReceipt };
+  const receipts: WalletReceipt[] = [];
+  const held = new Map<number, WalletReceipt>();
+  for (const payment of purchases) {
+    if (sameAddress(payment.seller, address)) {
+      const acquired = held.get(payment.id);
+      if (acquired) acquired.resale = payment;
+      held.delete(payment.id);
+    }
+    if (sameAddress(payment.buyer, address)) {
+      const receipt = { purchase: payment };
+      receipts.push(receipt);
+      held.set(payment.id, receipt);
+    }
+  }
+  return receipts.reverse();
+}
+
 export async function readBookingHistory(market: Contract, fromBlock: number, through: number, previous?: BookingHistory): Promise<BookingHistory> {
   if (previous?.through === through) return previous;
   if (fromBlock > through) throw new Error("The deployment block is in the future.");
@@ -156,7 +176,7 @@ export async function readBookingHistory(market: Contract, fromBlock: number, th
   const topics = ["PrimaryPurchased", "Resold", "CheckedIn"].map((event) => marketInterface.getEvent(event)!.topicHash);
   for (let start = base ? base.through + 1 : fromBlock; start <= through; start += 2_000) {
     const logs = await provider.getLogs({ address, topics: [topics], fromBlock: start, toBlock: Math.min(through, start + 1_999) });
-    for (const log of logs) {
+    for (const log of logs.sort((a, b) => a.blockNumber - b.blockNumber || a.index - b.index)) {
       const event = marketInterface.parseLog(log);
       if (!event) continue;
       if (event.name === "CheckedIn") checkedIn.set(Number(event.args.id), event.args.traveler);

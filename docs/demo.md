@@ -1,6 +1,6 @@
 # StayCoin V3 presentation guide
 
-Use the [StayCoin website](https://staycoin-prototype.vercel.app/) after V3 publication is verified. During rehearsal, use V3 Preview and check for **Verified Night Token V3 · MockTHB payments**.
+Use the [StayCoin website](https://staycoin-prototype.vercel.app/) for the demo. During rehearsal, use V3 Preview and check for the **SEPOLIA** badge beside the prototype notice.
 
 ## Prepare the four wallets
 
@@ -16,8 +16,8 @@ Use the [StayCoin website](https://staycoin-prototype.vercel.app/) after V3 publ
 | Time | Show |
 | --- | --- |
 | 0:00–0:35 | Open StayCoin, connect TravelerA, and show Sepolia, MockTHB, and the available Token A. Explain that the hotel receives 95% and the platform receives 5%. |
-| 0:35–1:20 | Buy Token A at 2,000. Open the confirmed receipt and My Bookings. Show actual 1,900 / 100 transfers and TravelerA's ownership. |
-| 1:20–2:15 | List Token A for 3,000. Switch to TravelerB and buy it. Show the 2,660 seller, 250 hotel, and 90 platform transfers, then confirm TravelerB is the holder. |
+| 0:35–1:20 | Buy Token A at 2,000. Open My Bookings to show TravelerA's ownership. Open the transaction on Sepolia Etherscan to show the 1,900 / 100 transfers. |
+| 1:20–2:15 | List Token A for 3,000. Switch to TravelerB and buy it. Confirm TravelerB is the holder, then use Sepolia Etherscan to show the 2,660 seller, 250 hotel, and 90 platform transfers. |
 | 2:15–3:25 | Open the pre-staged Token B as TravelerB. Sign and copy the guest authorization. Switch to HotelWallet, find the booking by reference, confirm the off-chain identity check, paste the authorization, and redeem. Show the burned status and explain that reuse fails. |
 | 3:25–4:00 | Open the explorer receipts. Identify transactions prepared earlier and executed live. Explain that commercial customers would pay in THB through a future payment provider. |
 
