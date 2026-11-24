@@ -1,11 +1,11 @@
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { Building2, CalendarDays, ExternalLink, Hotel, KeyRound, Repeat2 } from "lucide-react";
 import { getAddress } from "ethers";
 import { dateKey, DAY, displayDay, futureStayDate, sameAddress, sepolia, shortAddress } from "./chain";
 import { canCheckIn, canResell, estimateResale, formatTHB, parseTHB, type Night } from "./marketV3";
 import { GuestAuthorization, HotelVerification } from "./CheckIn";
 import { bookingReference, ReceiptCard } from "./Receipt";
-import { baht, demoResale, sampleHotels } from "./demo";
+import { demoResale, sampleHotels } from "./demo";
 import { AccountGate, signInLink } from "./Account";
 import { ExpireNight, PartnerOverview } from "./PartnerTools";
 import { Empty, PageIntro, WalletGate } from "./Marketplace";
@@ -79,43 +79,73 @@ export function MyBookings({ market }: { market: Market }) {
   </section>;
 }
 
+type ResaleCardProps = {
+  hotel: string;
+  stay: string;
+  reference?: string;
+  example?: boolean;
+  price: bigint;
+  fee: bigint;
+  payout?: { label: string; amount: bigint };
+  action?: ReactNode;
+};
+
+function ResaleCard({ hotel, stay, reference, example, price, fee, payout, action }: ResaleCardProps) {
+  return <article className="panel resale-card">
+    <div className="resale-card-main">
+      <div className="booking-heading">
+        <span className="tile-icon" aria-hidden="true"><Repeat2 size={22} /></span>
+        <div>
+          {example && <span className="pill">Example listing</span>}
+          <h3>{hotel}</h3>
+          <p>{stay}</p>
+          {reference && <p className="resale-reference">{reference}</p>}
+        </div>
+      </div>
+      <div className="resale-offer">
+        <div className="resale-price">
+          <span>Resale price</span>
+          <div><strong>{formatTHB(price)}</strong> <small>{example ? "THB" : "MockTHB"}</small></div>
+        </div>
+        {action}
+      </div>
+    </div>
+    <dl className="resale-fees">
+      <div><dt>Platform fee included</dt><dd>{formatTHB(fee)}</dd></div>
+      {payout && <div><dt>{payout.label}</dt><dd>{formatTHB(payout.amount)}</dd></div>}
+    </dl>
+  </article>;
+}
+
 export function Resale({ market }: { market: Market }) {
-  const blockTime = market.wallet.isDemo ? undefined : market.synced?.blockTime;
+  const { wallet } = market;
+  const blockTime = wallet.isDemo ? undefined : market.synced?.blockTime;
   const listings = market.synced?.data.nights.filter((night) =>
     night.quote && blockTime !== undefined && canResell(night, blockTime)) ?? [];
-  const demo = estimateResale(BigInt(demoResale.price), BigInt(demoResale.previousPrice), BigInt(demoResale.previousPrice));
-  return <section className="shell content-page">
-    <PageIntro title="Resale marketplace" description="Take over an eligible booking from another traveler. See the price and payout split before you buy." />
-    {blockTime === undefined ? <article className="panel">
-      <div className="row-between"><div className="booking-heading"><span className="tile-icon"><Repeat2 size={22} /></span><div>
-        <h3>{demoResale.name}</h3><p>{demoResale.city} · {demoResale.room} · {displayDay(demoResale.date)}</p>
-      </div></div><span className="pill">Example listing</span></div>
-      <div className="split-grid">
-        <div><span>Buyer pays</span><strong>{baht(demoResale.price)}</strong></div>
-        <div><span>Seller receives</span><strong>{baht(Number(demo.seller))}</strong></div>
-        <div><span>Hotel receives</span><strong>{baht(Number(demo.hotel))}</strong></div>
-        <div><span>Platform fee</span><strong>{baht(Number(demo.platform))}</strong></div>
-      </div><p className="inline-note">Illustrative prices in baht. Sepolia listings settle in MockTHB.</p>
-      {!market.wallet.signedIn && !market.wallet.isDemo && <a href={signInLink("/resale")} className="button secondary">Sign in to buy or resell</a>}
-    </article> : listings.length === 0 ? <Empty title="No active resale listings" detail="Listed bookings appear here until they sell or reach the stay date." />
-      : <div className="panel-list">{listings.map((night) => {
-        const split = night.quote!;
-        const own = sameAddress(night.holder, market.wallet.address);
-        const issuingHotel = sameAddress(night.hotel, market.wallet.address);
-        return <article className="panel" key={night.id}><div className="row-between"><BookingHeading night={night} /><span className="pill">Active listing</span></div>
-          <div className="split-grid">
-            <div><span>Buyer pays</span><strong>{formatTHB(night.listingPrice)}</strong></div>
-            <div><span>Seller receives</span><strong>{formatTHB(split.seller)}</strong></div>
-            <div><span>Hotel receives</span><strong>{formatTHB(split.hotel)}</strong></div>
-            <div><span>Platform fee</span><strong>{formatTHB(split.platform)}</strong></div>
-          </div>
-          {!market.wallet.signedIn ? <a href={signInLink("/resale")} className="button">Sign in to buy</a>
-            : <button className="button" disabled={!market.canWrite || market.busy || own || issuingHotel}
-              onClick={() => void market.checkout(night, true)}
-              >{own ? "Your listing" : issuingHotel ? "Your hotel’s listing" : "Buy resale"}</button>}
-
-        </article>;
-      })}</div>}
+  const demoPrice = BigInt(demoResale.price) * 100n;
+  const demoOriginal = BigInt(demoResale.previousPrice) * 100n;
+  return <section className="shell content-page resale-page">
+    <PageIntro title="Resale marketplace" description="Find a stay listed by another traveler and see the total price before you book." />
+    {blockTime === undefined ? <ResaleCard example hotel={demoResale.name}
+      stay={demoResale.city + " · " + demoResale.room + " · " + displayDay(demoResale.date)}
+      price={demoPrice} fee={estimateResale(demoPrice, demoOriginal, demoOriginal).platform}
+      action={!wallet.signedIn && !wallet.isDemo && <a href={signInLink("/resale")} className="button secondary">Sign in</a>} />
+      : listings.length === 0 ? <Empty title="No active resale listings" detail="Listed bookings appear here until they sell or reach the stay date." />
+        : <div className="panel-list">{listings.map((night) => {
+          const split = night.quote!;
+          const isSeller = wallet.signedIn && sameAddress(night.holder, wallet.address);
+          const isHotel = wallet.signedIn && sameAddress(night.hotel, wallet.address);
+          const payout = isSeller ? { label: "Seller receives", amount: split.seller }
+            : isHotel ? { label: "Hotel receives", amount: split.hotel } : undefined;
+          const action = !wallet.signedIn ? <a href={signInLink("/resale")} className="button">Sign in to buy</a>
+            : isSeller ? <a href="/bookings" className="button secondary">Manage listing</a>
+            : isHotel ? <a href="/dashboard" className="button secondary">View hotel inventory</a>
+            : <button className="button" disabled={!market.canWrite || market.busy}
+              onClick={() => void market.checkout(night, true)}>Buy resale</button>;
+          return <ResaleCard key={night.id} hotel={night.hotelName} reference={bookingReference(night.id)}
+            stay={night.roomCategory + " · " + displayDay(dateKey(night.stayDate)) + " · Bangkok"}
+            price={night.listingPrice} fee={split.platform} payout={payout} action={action} />;
+        })}</div>}
   </section>;
 }
 

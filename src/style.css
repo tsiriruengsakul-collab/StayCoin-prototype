@@ -135,6 +135,21 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .split-grid > div { display: grid; gap: 2px; min-width: 0; padding: 10px; background: #f3f8ff; border-radius: 8px; }
 .split-grid span { color: var(--muted); font-size: .875rem; }
 .split-grid strong { color: var(--ink); overflow-wrap: anywhere; }
+.resale-page { max-width: 1020px; }
+.resale-card { padding: clamp(16px, 3vw, 26px); }
+.resale-card-main { display: flex; align-items: center; justify-content: space-between; gap: 26px; }
+.resale-card .booking-heading { align-items: flex-start; }
+.resale-card .booking-heading h3 { overflow-wrap: anywhere; }
+.resale-card .pill { margin-bottom: 6px; }
+.resale-card .resale-reference { margin-top: 4px; font-size: .8125rem; }
+.resale-offer { display: grid; justify-items: end; gap: 8px; text-align: right; min-width: 0; }
+.resale-offer .button { margin: 0; }
+.resale-price { min-width: 0; }
+.resale-price > span, .resale-price small { color: var(--muted); font-size: .8125rem; }
+.resale-price strong { color: var(--brand); font-size: clamp(1.8rem, 4vw, 2.35rem); font-weight: 800; letter-spacing: -.055em; line-height: 1.15; overflow-wrap: anywhere; }
+.resale-fees { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 5px 16px; margin: 16px 0 0; padding-top: 10px; border-top: 1px solid var(--line); color: var(--muted); font-size: .8125rem; }
+.resale-fees > div { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
+.resale-fees dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .dashboard-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; }
 .dashboard-grid .stack-form { margin-top: 12px; }
 .dashboard-grid .stack-form .button { justify-self: start; }
@@ -192,6 +207,8 @@ button:disabled { cursor: not-allowed; opacity: .52; }
   .content-page { padding-top: 22px; }
   .row-between { flex-wrap: wrap; }
   .split-grid { grid-template-columns: repeat(2, 1fr); }
+  .resale-card-main { align-items: stretch; flex-direction: column; gap: 16px; }
+  .resale-offer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; text-align: left; }
   .proceeds { flex-wrap: wrap; }
   .footer-inner { flex-wrap: wrap; }
   .footer-test { margin-left: 0; }
