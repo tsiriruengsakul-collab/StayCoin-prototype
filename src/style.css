@@ -61,6 +61,8 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .badge, .pill { display: inline-flex; align-items: center; background: #e7f7ff; color: #244a68; padding: 4px 10px; border-radius: 999px; white-space: nowrap; font-size: .75rem; font-weight: 800; }
 .badge { letter-spacing: .045em; }
 .live, .state-confirmed { background: #d9f9e6; color: #126137; }
+.prototype-notice { align-items: flex-start; }
+.mode-hint { color: var(--muted); font-size: .8125rem; }
 .notice-error, .transaction-strip { padding: 10px 14px; border-radius: 10px; }
 .notice-error { display: flex; align-items: flex-start; gap: 10px; color: #8d212c; background: #fff0ef; overflow-wrap: anywhere; }
 .notice-error svg { flex-shrink: 0; }
@@ -127,6 +129,19 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .panel-list, .stack-form { display: grid; gap: 13px; }
 .booking-heading { display: flex; gap: 13px; align-items: center; min-width: 0; }
 .booking-heading p, .panel-meta { font-size: .875rem; overflow-wrap: anywhere; }
+.booking-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
+.booking-card-summary { display: grid; justify-items: end; gap: 6px; text-align: right; min-width: 0; }
+.booking-card-summary .booking-amount { display: grid; gap: 2px; line-height: 1.2; }
+.booking-amount > span:first-child, .booking-amount small, .booking-asking { font-size: .8125rem; }
+.booking-amount strong { color: var(--ink); font-size: clamp(1.6rem, 3vw, 2.15rem); font-weight: 800; letter-spacing: -.045em; overflow-wrap: anywhere; }
+.booking-status { max-width: 100%; white-space: normal; line-height: 1.25; overflow-wrap: anywhere; }
+.booking-status-neutral { background: #edf1f6; color: #465572; }
+.booking-status-available { background: #dff8f4; color: #146159; }
+.booking-status-booked { background: #e5f3ff; color: #195486; }
+.booking-status-listed { background: #ecebff; color: #42378f; }
+.booking-status-check-in { background: #fff2d6; color: #7d4b11; }
+.booking-status-redeemed { background: #def6e8; color: #17633e; }
+.booking-status-closed { background: #fceef0; color: #883b51; }
 .panel-meta, .panel .button { margin-top: 11px; }
 .form-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 9px; margin-top: 10px; }
 .form-row .button { margin-bottom: 1px; }
@@ -209,6 +224,8 @@ button:disabled { cursor: not-allowed; opacity: .52; }
   .flex-tip .button { margin-left: 58px; }
   .content-page { padding-top: 22px; }
   .row-between { flex-wrap: wrap; }
+  .booking-card-head { display: grid; gap: 12px; }
+  .booking-card-summary { justify-items: start; text-align: left; }
   .split-grid { grid-template-columns: repeat(2, 1fr); }
   .resale-card-main { align-items: stretch; flex-direction: column; gap: 16px; }
   .resale-offer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; text-align: left; }
@@ -270,8 +287,17 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .metric-card .tile-icon { grid-row: span 2; }
 .metric-card > span:nth-child(2) { font-size: .875rem; color: var(--muted); }
 .metric-card strong { color: var(--ink); font-size: 1.45rem; line-height: 1.2; }
-.analytics-totals { margin: 19px 0 12px; }
-.price-chart { display: grid; gap: 9px; margin: 16px 0 2px; }
+.analytics-panel .analytics-count { margin-top: 16px; font-size: .875rem; }
+.analytics-count strong { color: var(--ink); }
+.analytics-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 9px; }
+.analytics-metrics { margin: 0; padding: 12px 15px; background: #f6f9fd; border: 1px solid var(--line); border-radius: 12px; }
+.analytics-metrics-resale { background: #f0f4ff; border-color: #e1e8fa; }
+.analytics-metrics > div + div { margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--line); }
+.analytics-metrics dt, .analytics-note { font-size: .8125rem; color: var(--muted); }
+.analytics-metrics dd { margin: 3px 0 0; color: var(--ink); font-size: 1.15rem; font-weight: 750; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.analytics-panel .analytics-note { margin-top: 8px; }
+.price-chart { display: grid; gap: 9px; margin: 16px 0 2px; padding-top: 14px; border-top: 1px solid var(--line); }
+.price-chart h4 { margin: 0 0 3px; color: var(--ink); font-size: .9rem; font-weight: 750; }
 .chart-row { display: grid; grid-template-columns: 110px minmax(50px, 1fr) minmax(140px, auto); align-items: center; gap: 10px; font-size: .875rem; color: var(--ink); }
 .chart-row small { font-size: .8rem; color: var(--muted); }
 .chart-track { height: 13px; border-radius: 5px; background: #eef4fa; overflow: hidden; }
@@ -290,6 +316,7 @@ button:disabled { cursor: not-allowed; opacity: .52; }
   .metric-card .tile-icon { width: 29px; height: 31px; }
   .metric-card .tile-icon svg { width: 16px; }
   .chart-row { grid-template-columns: 70px minmax(38px, 1fr) minmax(104px, auto); gap: 6px; }
+  .analytics-summary { grid-template-columns: 1fr; }
   .footer-links { margin-left: 0; }
 }
 .check-in-field { display: grid; gap: 6px; margin-block: 8px; width: min(100%, 42rem); }

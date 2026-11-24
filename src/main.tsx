@@ -89,9 +89,11 @@ function App() {
       </div>
     </header>
     <div className="shell notices">
-      <p className="status-strip">{prototypeNotice}</p>
-      <div className="status-strip" role="status"><span className={live ? "badge live" : "badge"}>{live ? "SEPOLIA" : "DEMO MODE"}</span>
-        <span>{live ? "Verified Night Token V3 · MockTHB payments" : message}</span></div>
+      <div className="status-strip prototype-notice" role="status">
+        <span className={live ? "badge live" : "badge"}>{live ? "SEPOLIA" : "DEMO MODE"}</span>
+        <span>{prototypeNotice}</span>
+      </div>
+      {!live && <p className="mode-hint">{message}</p>}
       {live && wallet.signedIn && market.synced && <p className="status-strip">
         <span>MockTHB balance <strong>{formatTHB(market.synced.data.mockBalance)}</strong></span>
         <span>Sepolia gas balance <strong>{gasAmount(market.synced.data.gasBalance)} test ETH</strong></span>

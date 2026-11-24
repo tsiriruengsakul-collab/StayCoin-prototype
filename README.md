@@ -33,7 +33,7 @@ Configure the existing Vercel project for the feature branch's **Preview** envir
 | `VITE_STAYCOIN_MOCKTHB_ADDRESS` | MockTHB address |
 | `VITE_STAYCOIN_DEPLOYMENT_BLOCK` | Night Token V3 deployment block as a decimal number |
 
-Redeploy Preview after changing variables because Vite reads them during the build. To use the same contracts locally, copy `.env.example` to `.env.local`, populate the three variables, and restart Vite. Connect MetaMask on Sepolia and look for **Verified Night Token V3 · MockTHB payments**. Live actions depend on successful bytecode and configuration verification.
+Redeploy Preview after changing variables because Vite reads them during the build. To use the same contracts locally, copy `.env.example` to `.env.local`, populate the three variables, and restart Vite. Connect MetaMask and look for the **SEPOLIA** badge beside the prototype notice. Live actions depend on successful bytecode and configuration verification.
 
 Before switching Production, complete a successful live primary purchase and resale on Preview and verify the receipt, actual ERC-20 payouts, and resulting holder on Sepolia. Use the same three variables for Production after review and merge, then verify the canonical URL and repeat the wallet and receipt checks. See the [presenter guide](docs/demo.md) for the full rehearsal, evidence, and rollback.
 

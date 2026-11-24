@@ -4,7 +4,7 @@ import { network } from "hardhat";
 import { Contract, Interface, ZeroAddress, type ContractTransactionResponse, type TransactionResponse } from "ethers";
 import { bookingDate, dateKey, DAY } from "../src/chain.js";
 import { currencyAbi, estimateResale, formatTHB, marketAbi, parseGuestProof, parseTHB, proofDomain, proofTypes, purchase,
-  readBookingHistory, readMarket, requireWalletContext, verifyV3 } from "../src/marketV3.js";
+  readBookingHistory, readMarket, requireWalletContext, verifyV3, walletPaymentReceipts } from "../src/marketV3.js";
 
 const thb = (baht: number) => BigInt(baht) * 100n;
 const start = thb(2000);
@@ -210,6 +210,26 @@ describe("StayCoin V3 MockTHB lifecycle", function () {
     assert.deepEqual(history.resales.get(1), { sales: 1n, volume: resale });
     assert.equal(parseTHB("2.11"), 211n);
     assert.equal(formatTHB(-100_001n), "−฿1,000.01");
+  });
+
+  it("pairs each purchase with its own confirmed payout when a wallet rebuys and resells the same booking", async () => {
+    await resell();
+    const first = await f.ethers.provider.getBlock("latest");
+    const originalHistory = await readBookingHistory(f.market, f.deployBlock, first!.number);
+    await f.list(thb(4200), f.travelerB);
+    await f.approve(f.travelerA, thb(4200));
+    await f.buyResale(thb(4200), f.travelerA, f.travelerB);
+    await f.list(thb(3800));
+    await f.approve(f.guest, thb(3800));
+    const secondResale = await f.buyResale(thb(3800), f.guest);
+    const history = await readBookingHistory(f.market, f.deployBlock, secondResale.blockNumber, originalHistory);
+    const receipts = walletPaymentReceipts(history.purchases, f.travelerA.address);
+    assert.deepEqual(receipts.map(({ purchase, resale }) => [purchase.paid, resale?.payout.seller]), [
+      [thb(4200), thb(3236)],
+      [thb(2000), thb(2660)],
+    ]);
+    assert.equal(receipts[0].resale?.hash, secondResale.hash);
+    assert.equal(walletPaymentReceipts(history.purchases, f.guest.address)[0].resale, undefined);
   });
 
   it("stops multi-step checkout if the wallet changes after approval", async () => {

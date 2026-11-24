@@ -2,7 +2,8 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { Building2, CalendarDays, ExternalLink, Hotel, KeyRound, Repeat2 } from "lucide-react";
 import { getAddress } from "ethers";
 import { dateKey, DAY, displayDay, futureStayDate, sameAddress, sepolia, shortAddress } from "./chain";
-import { canCheckIn, canResell, estimateResale, formatTHB, parseTHB, type Night } from "./marketV3";
+import { canCheckIn, canResell, estimateResale, formatTHB, parseTHB, walletPaymentReceipts, type Night } from "./marketV3";
+import { BookingStatus } from "./BookingStatus";
 import { GuestAuthorization, HotelVerification } from "./CheckIn";
 import { bookingReference, ReceiptCard } from "./Receipt";
 import { demoResale, sampleHotels } from "./demo";
@@ -39,7 +40,7 @@ function ListingForm({ night, market }: { night: Night; market: Market }) {
       {night.listingPrice ? "Update listing" : "List for resale"}</button>
     {Boolean(night.listingPrice) && <button type="button" className="button secondary compact" disabled={!market.canWrite || market.busy}
       onClick={() => void market.run("Cancel listing #" + night.id, (contract) => contract.cancelListing(night.id))}>Cancel listing</button>}
-    {quote && <p className="inline-note">Estimated split · Seller {formatTHB(quote.seller)} · Hotel {formatTHB(quote.hotel)} · Platform {formatTHB(quote.platform)} · Your net gain/loss {formatTHB(quote.net)}. The hotel share uses the original booking price.</p>}
+    {quote && <p className="inline-note">Estimated proceeds {formatTHB(quote.seller)} · Your net gain/loss {formatTHB(quote.net)}</p>}
   </form>;
 }
 
@@ -50,31 +51,38 @@ export function MyBookings({ market }: { market: Market }) {
       || sameAddress(market.history?.checkedIn.get(night.id) ?? null, market.wallet.address)
     )) ?? [];
   const { wallet } = market;
+  const receipts = wallet.signedIn && market.history ? walletPaymentReceipts(market.history.purchases, wallet.address) : [];
   return <section className="shell content-page">
     <PageIntro title="My bookings" description="See stays held by your wallet, check their status, and list eligible bookings for resale." />
     {wallet.isDemo ? <article className="panel"><div className="row-between"><div className="booking-heading">
         <span className="tile-icon"><KeyRound size={22} /></span><div><h3>{sampleHotels[0].name}</h3>
         <p>{sampleHotels[0].city} · {sampleHotels[0].room} · {displayDay(sampleHotels[0].date)}</p></div></div>
-        <span className="pill">Sample booking</span></div><p className="inline-note">In a wallet account, eligible stays can be listed for resale or presented at check-in.</p></article>
+        <BookingStatus status="sample" /></div><p className="inline-note">In a wallet account, eligible stays can be listed for resale or presented at check-in.</p></article>
       : !wallet.signedIn ? <AccountGate path="/bookings" detail="Sign in to view your bookings, manage listings, and view payment receipts." />
       : blockTime === undefined ? <WalletGate market={market} />
       : bookings.length === 0 ? <Empty title="No bookings in this wallet" detail="A confirmed booking will appear here after a purchase." />
       : <div className="panel-list">{bookings.map((night) => {
         const eligible = canResell(night, blockTime);
-        const status = night.redeemed ? "Redeemed" : night.expired ? "Expired · token burned" : eligible ? (night.listingPrice ? "Listed" : "Booked")
-          : blockTime < night.stayDate + DAY ? "Check-in today" : "Awaiting expiry";
-        return <article className="panel" key={night.id}><div className="row-between">
-          <BookingHeading night={night} /><span className="pill">{status}</span></div>
-          <p className="panel-meta">Paid {formatTHB(night.lastPaidPrice)} MockTHB{eligible && night.listingPrice > 0n && " · Asking " + formatTHB(night.listingPrice)}</p>
+        const status = night.redeemed ? "redeemed" : night.expired ? "expiredBurned" : eligible ? (night.listingPrice ? "listed" : "booked")
+          : blockTime < night.stayDate + DAY ? "checkInToday" : "awaitingExpiry";
+        return <article className="panel" key={night.id}><div className="booking-card-head">
+          <BookingHeading night={night} />
+          <div className="booking-card-summary">
+            <BookingStatus status={status} />
+            <p className="booking-amount"><span>You paid</span><span><strong>{formatTHB(night.lastPaidPrice)}</strong> <small>MockTHB</small></span></p>
+            {eligible && night.listingPrice > 0n && <p className="booking-asking">Listed for {formatTHB(night.listingPrice)}</p>}
+          </div>
+        </div>
           {eligible && <ListingForm night={night} market={market} />}
           {canCheckIn(night, blockTime) && sameAddress(night.holder, wallet.address) && <GuestAuthorization key={night.holder + String(night.nonce)} night={night} market={market} />}
           <ExpireNight night={night} market={market} />
         </article>;
       })}</div>}
     {market.synced && wallet.signedIn && <section className="inventory"><h2>Payment receipts</h2>
-      {!market.history ? <p>Receipts appear once Sepolia event history loads.</p>
-        : <div className="panel-list">{market.history.purchases.filter((receipt) => sameAddress(receipt.buyer, wallet.address))
-          .slice().reverse().map((receipt) => <ReceiptCard key={receipt.hash} market={market} receipt={receipt} heading={false} />)}</div>}
+      {!market.history ? <p>{market.historyError || "Receipts appear once Sepolia event history loads."}</p>
+        : receipts.length === 0 ? <p>No payment receipts yet.</p>
+        : <div className="panel-list">{receipts.map(({ purchase, resale }) =>
+          <ReceiptCard key={purchase.hash} market={market} receipt={purchase} resale={resale} heading={false} />)}</div>}
     </section>}
   </section>;
 }
@@ -214,9 +222,9 @@ export function Dashboard({ market }: { market: Market }) {
         {(results ?? inventory).length === 0 ? <Empty title="No matching nights" detail="Check the booking reference or mint a night using the form above." />
           : <div className="panel-list">{(results ?? inventory).map((night) => {
             const eligibleForCheckIn = canCheckIn(night, timestamp);
-            const label = night.redeemed ? "Redeemed" : night.expired ? "Expired · token burned" : timestamp >= night.stayDate + DAY ? "Awaiting expiry"
-              : night.sold ? (eligibleForCheckIn ? "Check-in open" : "Booked") : timestamp >= night.stayDate ? "Sales closed" : "Available";
-            return <article className="panel" key={night.id}><div className="row-between"><BookingHeading night={night} /><span className="pill">{label}</span></div>
+            const status = night.redeemed ? "redeemed" : night.expired ? "expiredBurned" : timestamp >= night.stayDate + DAY ? "awaitingExpiry"
+              : night.sold ? (eligibleForCheckIn ? "checkInOpen" : "booked") : timestamp >= night.stayDate ? "salesClosed" : "available";
+            return <article className="panel" key={night.id}><div className="row-between"><BookingHeading night={night} /><BookingStatus status={status} /></div>
               {night.sold && !night.redeemed && !night.expired && <p className="panel-meta">Traveler <code>{night.holder}</code></p>}
               <p className="panel-meta">Original price {formatTHB(night.originalPrice)} MockTHB</p>
               {eligibleForCheckIn && <HotelVerification key={night.holder + String(night.nonce)} market={market} night={night} />}
