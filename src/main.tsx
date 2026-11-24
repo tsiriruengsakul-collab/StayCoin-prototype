@@ -67,8 +67,7 @@ function App() {
   const portal = route?.path === "/dashboard";
   const live = Boolean(market.synced && !wallet.isDemo);
   let message = "The Sepolia V3 and MockTHB addresses are required for live inventory. Sample inventory is shown.";
-  if (wallet.isDemo) message = "Demo account · sample inventory and example balances only.";
-  else if (configured && !wallet.ready) message = "Use MetaMask on Sepolia to load live inventory. Sample inventory is shown.";
+  if (configured && !wallet.ready) message = "Use MetaMask on Sepolia to load live inventory. Sample inventory is shown.";
   else if (market.marketError) message = market.marketError + " Sample inventory is shown.";
   else if (configured) message = "Loading live Sepolia inventory. Sample inventory is shown until it is available.";
 
@@ -93,7 +92,7 @@ function App() {
         <span className={live ? "badge live" : "badge"}>{live ? "SEPOLIA" : "DEMO MODE"}</span>
         <span>{prototypeNotice}</span>
       </div>
-      {!live && <p className="mode-hint">{message}</p>}
+      {!live && !wallet.isDemo && <p className="mode-hint">{message}</p>}
       {live && wallet.signedIn && market.synced && <p className="status-strip">
         <span>MockTHB balance <strong>{formatTHB(market.synced.data.mockBalance)}</strong></span>
         <span>Sepolia gas balance <strong>{gasAmount(market.synced.data.gasBalance)} test ETH</strong></span>
