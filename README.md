@@ -70,4 +70,4 @@ Illustrative resort and room photography from Unsplash. Sample hotel names are f
 - [Koh Samui sample](https://images.unsplash.com/photo-1571896349842-33c89424de2d)
 - [Ari sample](https://images.unsplash.com/photo-1566665797739-1674de7a421a)
 
-The header and favicon use a vector trace of the project's coin logo.
+The header, footer, and favicon use the StayCoin house-and-ribbon symbol.
