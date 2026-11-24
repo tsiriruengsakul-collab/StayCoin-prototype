@@ -29,9 +29,9 @@ Fill in the hash and [Sepolia Etherscan](https://sepolia.etherscan.io/) link onl
 | --- | --- | --- |
 | MockTHB deployment | `0xa2C5bff32a914957d0117D438AE944946451607F` · block 12199603 · two decimals · runtime fingerprint matched | [Sepolia deployment](https://sepolia.etherscan.io/tx/0x1b7aa87652e86674a46e90c9c7e5cf49b626a4c6d6ad74c407f6b7693fe431d0) |
 | Night Token V3 deployment | `0x5A84E37e839194D659a820bf24b3A41F183414fA` · block 12199649 · MockTHB configured · runtime fingerprint matched | [Sepolia deployment](https://sepolia.etherscan.io/tx/0x7a8751366f1312bbfba551fbc45a972dcf952b9d4a5dc39b7f01184effc8b41e) |
-| Preparation | Approval of HotelWallet, funding, and Token IDs for A and B | Pending |
-| Primary purchase | Exact 2,000 debit, 1,900 / 100 credits, TravelerA ownership | Pending |
-| Resale | Exact 3,000 debit, 2,660 / 250 / 90 credits, TravelerB ownership | Pending |
+| Live primary purchase | Token #1, DemoResort Deluxe A, November 30, 2026. TravelerA paid 5,000 MockTHB. Hotel received 4,750 and StayCoin received 250. | [Sepolia purchase](https://sepolia.etherscan.io/tx/0x91b3e31d6a576a5bcaa69d10f9a08ff506d0c576a0802d0a9c9860bdd1d6c70a) |
+| Live resale | Token #1. TravelerB paid 6,000 MockTHB and received the Night Token. TravelerA received 5,570, the hotel received 250, and StayCoin received 180. | [Sepolia resale](https://sepolia.etherscan.io/tx/0xea69865130fbc29709f3f827b5ac14453e2eceb2ed738097f909a331f78c5427) |
+| Presentation scenario | Primary purchase at 2,000 and resale at 3,000. The automated tests verify the exact 1,900 / 100 and 2,660 / 250 / 90 distributions. | Live run pending |
 | Check-in | Successful hotel redemption, burn, and zero ERC-1155 balance | Pending |
 
 Both contracts are owned by PlatformWallet `0x50BCA15eA3df196fD78ef83Ec5beac2B6f9C5477`. Sourcify reports exact source matches for both deployments. The frontend checks the executable fingerprints in `src/generated/`. [MockTHB on Sourcify](https://sourcify.dev/server/v2/contract/11155111/0xa2C5bff32a914957d0117D438AE944946451607F) · [V3 on Sourcify](https://sourcify.dev/server/v2/contract/11155111/0x5A84E37e839194D659a820bf24b3A41F183414fA)
