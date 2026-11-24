@@ -5,7 +5,9 @@ import "@fontsource-variable/manrope";
 import "@fontsource-variable/inter";
 import "./style.css";
 import { brand } from "./brand";
-import { contractAddress, invalidAddress, shortAddress } from "./chain";
+import { sameAddress, shortAddress } from "./chain";
+import { configured, formatTHB, gasAmount, prototypeNotice } from "./marketV3";
+import { ReceiptCard } from "./Receipt";
 import { Activity, Dashboard, MyBookings, Resale } from "./BookingPages";
 import { SignIn, signInLink } from "./Account";
 import { Passes, Rewards } from "./Extras";
@@ -62,12 +64,11 @@ function App() {
   const latest = wallet.signedIn ? market.activity.find((item) => item.account.toLowerCase() === wallet.address?.toLowerCase()) : undefined;
   const portal = route?.path === "/dashboard";
   const live = Boolean(market.synced && !wallet.isDemo);
-  let message = "Set VITE_STAYCOIN_CONTRACT_ADDRESS to the patched V2 address on Sepolia. Sample inventory is shown.";
+  let message = "The Sepolia V3 and MockTHB addresses are required for live inventory. Sample inventory is shown.";
   if (wallet.isDemo) message = "Demo account · sample inventory and example balances only.";
-  else if (invalidAddress) message = "VITE_STAYCOIN_CONTRACT_ADDRESS must be a valid nonzero Ethereum address. Sample inventory is shown.";
-  else if (contractAddress && !wallet.ready) message = "Use MetaMask on Sepolia to load live inventory. Sample inventory is shown.";
+  else if (configured && !wallet.ready) message = "Use MetaMask on Sepolia to load live inventory. Sample inventory is shown.";
   else if (market.marketError) message = market.marketError + " Sample inventory is shown.";
-  else if (contractAddress) message = "Loading live Sepolia inventory. Sample inventory is shown until it is available.";
+  else if (configured) message = "Loading live Sepolia inventory. Sample inventory is shown until it is available.";
 
   return <div onClick={nav} className="site">
     <a className="skip-link" href="#content">Skip to content</a>
@@ -86,8 +87,13 @@ function App() {
       </div>
     </header>
     <div className="shell notices">
+      <p className="status-strip">{prototypeNotice}</p>
       <div className="status-strip" role="status"><span className={live ? "badge live" : "badge"}>{live ? "SEPOLIA" : "DEMO MODE"}</span>
-        <span>{live ? "Verified Night Token V2 · Transactions use Sepolia test ETH." : message}</span></div>
+        <span>{live ? "Verified Night Token V3 · MockTHB payments" : message}</span></div>
+      {live && wallet.signedIn && market.synced && <p className="status-strip">
+        <span>MockTHB balance <strong>{formatTHB(market.synced.data.mockBalance)}</strong></span>
+        <span>Sepolia gas balance <strong>{gasAmount(market.synced.data.gasBalance)} test ETH</strong></span>
+      </p>}
       {wallet.signedIn && !wallet.ready && <div className="status-strip transaction-strip" role="status">
         <span>Switch to Sepolia for live test transactions.</span><button className="button secondary compact" disabled={wallet.busy}
           onClick={() => void wallet.switchNetwork()}>Switch network</button></div>}
@@ -97,6 +103,8 @@ function App() {
       {!market.busy && latest?.status === "confirmed" && Date.now() - latest.time < 120000 &&
         <div className="status-strip transaction-success" role="status">{latest.label} confirmed on Sepolia. <a href="/activity">View activity</a></div>}
     </div>
+    {wallet.signedIn && live && market.recentReceipt && sameAddress(market.recentReceipt.buyer, wallet.address)
+      && route?.path !== "/bookings" && <section className="shell notices" aria-label="Latest booking confirmation"><ReceiptCard market={market} receipt={market.recentReceipt} /></section>}
     <main id="content" tabIndex={-1}><Page market={market} /></main>
     <footer className="footer"><div className="shell footer-inner"><div><Wordmark /><p>{brand.tagline}</p></div>
       <span className="token-badge"><img src="/stay-logo.svg" alt="" /> {brand.tokenSymbol}</span>

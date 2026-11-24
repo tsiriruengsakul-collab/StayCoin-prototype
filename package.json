@@ -12,7 +12,8 @@
     "test": "hardhat test",
     "deploy:local": "hardhat run scripts/deploy.ts --network localhost",
     "chain": "hardhat node",
-    "prepare:sepolia": "npm run compile && node --experimental-strip-types scripts/prepare-sepolia.mjs"
+    "prepare:sepolia": "npm run compile && node --experimental-strip-types scripts/prepare-sepolia.mjs",
+    "prepare:sepolia:v3": "npm run compile && node --experimental-strip-types scripts/prepare-sepolia-v3.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.0",

@@ -1,5 +1,5 @@
 export const brand = {
-  websiteName: "Staycoin",
+  websiteName: "StayCoin",
   tokenSymbol: "STAY",
   seasonalPass: "Happy Pass",
   tagline: "Book it. Change it. Get paid back.",

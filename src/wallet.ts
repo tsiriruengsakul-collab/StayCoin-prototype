@@ -10,7 +10,7 @@ type InjectedWallet = Eip1193Provider & {
   removeListener?: (event: string, handler: (...args: never[]) => void) => void;
 };
 type WalletInfo = { address: string | null; chain: string | null };
-const sessionKey = "staypass-session-v2";
+const sessionKey = "staycoin-session-v3";
 const sessionLifetime = 8 * 60 * 60 * 1000;
 type Session = { mode: "demo" | "wallet"; address?: string; expires: number };
 function storedSession(): Session | null {

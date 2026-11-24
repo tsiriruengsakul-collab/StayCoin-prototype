@@ -15,7 +15,7 @@ export function Rewards({ market }: { market: Market }) {
     </div>
     <article className="panel wallet-summary"><div><span className="pill">Demo only</span>
       <h3>{market.wallet.isDemo ? "240 sample StayPoints" : "StayPoints preview"}</h3>
-      <p>StayPoints are locally tested in the separate marketplace prototype. The Sepolia Night Token contract has no rewards balance or checkout discount.</p>
+      <p>StayPoints are a preview. V3 focuses on Night Token purchases, resales, and check-in.</p>
     </div><a className="button secondary" href="/">Find a stay</a></article>
   </section>;
 }
@@ -39,6 +39,6 @@ export function Passes() {
       <div className="hotel-body"><h3>{pass.cities}</h3><p className="card-meta">One night · June to September</p>
         <div className="card-bottom"><span><strong>{baht(pass.price)}</strong> <del>{baht(pass.base)}</del></span><span className="pill">30% off</span></div></div>
     </article>)}</div>
-    <p className="inline-note">Happy Pass is locally tested in the separate marketplace prototype. The Sepolia Night Token contract does not issue or redeem these passes.</p>
+    <p className="inline-note">These offers illustrate how Happy Pass could work. Pass sales and redemption are planned for a future version.</p>
   </section>;
 }
