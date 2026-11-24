@@ -201,17 +201,19 @@ export const testEth = (value: bigint) => formatEther(value) + " test ETH";
 export const shortAddress = (value: string) => value.slice(0, 6) + "…" + value.slice(-4);
 export const hotelLabel = (address: string) => "Hotel " + shortAddress(address);
 
-export function errorText(error: unknown) {
+export function errorText(error: unknown, gasOnly = false) {
   if (error && typeof error === "object") {
     const result = error as { code?: number | string; reason?: string; shortMessage?: string; message?: string;
       info?: { error?: { message?: string } } };
     if (result.code === 4001 || result.code === "ACTION_REJECTED") return "You declined the request in your wallet.";
     if (result.code === -32002) return "Open MetaMask to complete the request already in progress.";
-    if (result.code === "INSUFFICIENT_FUNDS") return "This wallet needs more Sepolia test ETH for the payment and gas.";
+    if (result.code === "INSUFFICIENT_FUNDS") return gasOnly ? "This wallet needs more Sepolia test ETH for gas." : "This wallet needs more Sepolia test ETH for the payment and gas.";
     if (result.code === "NETWORK_ERROR") return "The wallet network changed. Switch back to Sepolia and try again.";
     const message = result.reason || result.info?.error?.message || result.shortMessage || result.message || "";
     const explanations = [
-      [/Incorrect test ETH payment|Incorrect listed price/, "The exact on-chain price is required. Refresh this booking and try again."],
+      [/Incorrect test ETH payment|Incorrect listed price|Price changed/, "The exact on-chain price is required. Refresh this booking and try again."],
+      [/ERC20InsufficientBalance/, "This wallet does not have enough MockTHB for the purchase."],
+      [/ERC20InsufficientAllowance/, "Approve the booking’s MockTHB payment amount and retry."],
       [/Outside check-in day/, "Check-in is open only on the booking’s Bangkok stay date."],
       [/Night expired|Not available|Not resale eligible/, "This booking has sold, closed, or is no longer eligible for this action."],
       [/Hotel not approved|Use approved room count/, "Use an approved hotel wallet and its verified room count."],

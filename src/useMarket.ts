@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { type Contract, type TransactionResponse } from "ethers";
-import { contractAddress, deploymentBlock, errorText, marketplace, readBookingHistory, readMarket, sepolia, verifyNightTokenV2, type BookingHistory } from "./chain";
+import { type Contract, type Signer, type TransactionReceipt, type TransactionResponse } from "ethers";
+import { errorText, sepolia } from "./chain";
+import { configured, contractAddress, currency, deploymentBlock, marketplace, mockTHBAddress, purchase,
+  readBookingHistory, readMarket, requireWalletContext, signGuestProof, verifyV3, type BookingHistory, type Night, type PaymentReceipt } from "./marketV3";
 import { useWallet } from "./wallet";
 
 type Status = "pending" | "confirmed" | "failed" | "unverified";
 type Activity = { hash: string; label: string; status: Status; time: number; account: string };
-const storageKey = "staypass-night-v2-sepolia:" + (contractAddress ?? "demo");
+const storageKey = "staycoin-night-v3-sepolia:" + (contractAddress ?? "demo");
 type MarketData = Awaited<ReturnType<typeof readMarket>>;
 
 function previousActivity(): Activity[] {
@@ -19,8 +21,9 @@ function previousActivity(): Activity[] {
 
 export function useMarket() {
   const wallet = useWallet();
-  const context = wallet.ready && contractAddress ? (wallet.address ?? "read-only") : null;
+  const context = wallet.ready && configured ? (wallet.address ?? "read-only") : null;
   const [snapshot, setSnapshot] = useState<{ context: string; data: MarketData; blockTime: bigint; blockNumber: number }>();
+  const [recentReceipt, setRecentReceipt] = useState<PaymentReceipt>();
   const [history, setHistory] = useState<BookingHistory>();
   const [historyError, setHistoryError] = useState("");
   const [marketError, setMarketError] = useState("");
@@ -40,16 +43,15 @@ export function useMarket() {
     const provider = wallet.provider();
     let active = true;
     let timer: number | undefined;
-    let verified: Contract | undefined;
+    let verified: Awaited<ReturnType<typeof verifyV3>> | undefined;
     async function poll() {
       try {
         const chain = await provider.getNetwork();
         if (chain.chainId !== BigInt(sepolia.id)) throw new Error("Switch to Sepolia.");
         const block = await provider.getBlock("latest");
-        if (!block || !contractAddress) throw new Error("Sepolia data is temporarily unavailable.");
-        const contract = verified ?? await verifyNightTokenV2(provider, contractAddress, block.number);
-        verified = contract;
-        const data = await readMarket(contract, wallet.address, block.number, BigInt(block.timestamp));
+        if (!block || !contractAddress || !mockTHBAddress) throw new Error("Sepolia V3 data is temporarily unavailable.");
+        verified ??= await verifyV3(provider, contractAddress, mockTHBAddress, block.number);
+        const data = await readMarket(verified.market, verified.token, wallet.address, block.number, BigInt(block.timestamp));
         if (active && context) {
           setSnapshot({ context, data, blockTime: BigInt(block.timestamp), blockNumber: block.number });
           setMarketError("");
@@ -58,7 +60,7 @@ export function useMarket() {
         if (active) {
           verified = undefined;
           setSnapshot(undefined);
-          setMarketError(errorText(err));
+          setMarketError(errorText(err, true));
         }
       } finally {
         if (active) timer = window.setTimeout(poll, 15000);
@@ -99,7 +101,7 @@ export function useMarket() {
   const blockNumber = synced?.blockNumber;
   const historyCache = useRef<BookingHistory | undefined>(undefined);
   useEffect(() => {
-    if (blockNumber === undefined || deploymentBlock === null) return;
+    if (blockNumber === undefined || !configured) return;
     let active = true;
     const contract = marketplace(wallet.provider(true));
     void readBookingHistory(contract, deploymentBlock, blockNumber, historyCache.current).then((result) => {
@@ -114,53 +116,80 @@ export function useMarket() {
   }, [blockNumber, wallet.provider]);
 
   const canWrite = Boolean(synced && wallet.address && wallet.signedIn && !marketError);
-  const run = async (label: string, submit: (contract: Contract) => Promise<TransactionResponse>) => {
-    if (!canWrite || !wallet.address || actionLock.current) return false;
+  type ActionContext = {
+    market: Contract; token: Contract; account: string; signer: Signer;
+    ensureWallet: () => Promise<void>;
+    confirm: (label: string, transaction: TransactionResponse) => Promise<TransactionReceipt>;
+  };
+  const operation = async <T,>(execute: (ctx: ActionContext) => Promise<T>) => {
+    if (!canWrite || !wallet.address || actionLock.current) return undefined;
     const account = wallet.address;
     actionLock.current = true;
     setBusy(true);
     setActionError("");
-    let hash = "";
-    type Replacement = { code?: string; cancelled?: boolean; replacement?: TransactionResponse; receipt?: { hash?: string; status?: number } };
-    const update = (patch: Partial<Activity>) =>
-      setActivity((items) => items.map((item) => item.hash === hash ? { ...item, ...patch } : item));
-
+    let submitted = false;
     try {
       const provider = wallet.provider(true);
-      if ((await provider.getNetwork()).chainId !== BigInt(sepolia.id)) throw new Error("Switch to Sepolia first.");
+      const ensureWallet = () => requireWalletContext(provider, account);
+      await ensureWallet();
       const signer = await provider.getSigner(account);
-      const transaction = await submit(marketplace(signer));
-      hash = transaction.hash;
-      setActivity((items) => [{ hash, label, status: "pending" as const, time: Date.now(), account }, ...items].slice(0, 100));
-      const receipt = await transaction.wait(1, 90000);
-      if (!receipt) throw new Error("Confirmation is pending. Check Transaction Activity.");
-      update({ status: receipt.status === 1 ? "confirmed" : "failed" });
-      return receipt.status === 1;
+      const confirm: ActionContext["confirm"] = async (label, transaction) => {
+        submitted = true;
+        const hash = transaction.hash;
+        setActivity((items) => [{ hash, label, status: "pending" as const, time: Date.now(), account }, ...items].slice(0, 100));
+        const update = (patch: Partial<Activity>) =>
+          setActivity((items) => items.map((item) => item.hash === hash ? { ...item, ...patch } : item));
+        try {
+          const receipt = await transaction.wait(1, 90000);
+          if (!receipt || receipt.status !== 1) throw new Error("The Sepolia receipt could not be confirmed.");
+          update({ status: "confirmed" });
+          return receipt;
+        } catch (err) {
+          const replacement = err as { code?: string; cancelled?: boolean; receipt?: TransactionReceipt };
+          if (replacement.code === "TRANSACTION_REPLACED" && replacement.receipt) {
+            if (!replacement.cancelled && replacement.receipt.status === 1) {
+              update({ status: "confirmed", hash: replacement.receipt.hash });
+              return replacement.receipt;
+            }
+            update({ status: "failed", hash: replacement.receipt.hash, label: label + " (cancelled or replaced)" });
+            throw new Error("The wallet cancelled or replaced this transaction.");
+          }
+          update({ status: replacement.receipt?.status === 0 ? "failed" : "unverified" });
+          throw new Error(replacement.receipt?.status === 0 ? "The transaction reverted on Sepolia."
+            : "Confirmation is unavailable. Check the hash in Transaction Activity before retrying.");
+        }
+      };
+      return await execute({ market: marketplace(signer), token: currency(signer), account, signer, ensureWallet, confirm });
     } catch (err) {
-      const result = err as Replacement;
-      if (hash && result.code === "TRANSACTION_REPLACED" && result.replacement) {
-        const equivalent = !result.cancelled && result.receipt?.status === 1;
-        if (!equivalent) setActionError("The original transaction was replaced or cancelled.");
-        update({ status: equivalent ? "confirmed" : "failed", hash: result.replacement.hash,
-          label: equivalent ? label : label + " (replaced or cancelled)" });
-        return equivalent;
-      }
-      if (hash) {
-        update({ status: result.receipt?.status === 0 ? "failed" : "unverified" });
-        setActionError(result.receipt?.status === 0 ? "The transaction reverted on Sepolia." :
-          "Confirmation is unavailable. Check the transaction in Activity or on Etherscan.");
-      } else {
-        setActionError(errorText(err));
-      }
-      return false;
+      setActionError(errorText(err, true));
+      return undefined;
     } finally {
       actionLock.current = false;
       setBusy(false);
-      if (hash) setRevision((value) => value + 1);
+      if (submitted) setRevision((value) => value + 1);
     }
   };
 
-  return { wallet, synced, canWrite, run, activity, busy, actionError, marketError, history: synced && history?.through === blockNumber ? history : undefined, historyError, setActionError };
+  const run = (label: string, submit: (contract: Contract, token: Contract) => Promise<TransactionResponse>) =>
+    operation(async ({ market, token, confirm, ensureWallet }) => {
+      await ensureWallet();
+      return confirm(label, await submit(market, token));
+    });
+
+  const checkout = (night: Night, resale: boolean) => operation(async ({ market, token, account, ensureWallet, confirm }) => {
+    const receipt = await purchase(market, token, night, resale, account, ensureWallet, confirm);
+    setRecentReceipt(receipt);
+    return receipt;
+  });
+
+  const makeProof = (night: Night) => operation(async ({ market, signer, ensureWallet }) => {
+    const proof = await signGuestProof(night, signer, await market.getAddress());
+    await ensureWallet();
+    return proof;
+  });
+
+  return { wallet, synced, canWrite, run, checkout, makeProof, recentReceipt, activity, busy, actionError, marketError,
+    history: synced && history && history.through <= synced.blockNumber ? history : undefined, historyError, setActionError };
 }
 
 export type Market = ReturnType<typeof useMarket>;
