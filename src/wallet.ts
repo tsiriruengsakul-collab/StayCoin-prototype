@@ -12,6 +12,7 @@ type InjectedWallet = Eip1193Provider & {
 type WalletInfo = { address: string | null; chain: string | null };
 const sessionKey = "staycoin-session-v3";
 const sessionLifetime = 8 * 60 * 60 * 1000;
+export const maxWalletNicknameLength = 24;
 type Session = { mode: "demo" | "wallet"; address?: string; expires: number };
 function storedSession(): Session | null {
   try { return JSON.parse(sessionStorage.getItem(sessionKey) || "null"); }
@@ -30,6 +31,7 @@ export function useWallet() {
   const wallet = announcedWallet ?? legacyWallet;
   const [info, setInfo] = useState<WalletInfo>(disconnected);
   const [session, setSession] = useState(storedSession);
+  const [savedNickname, setSavedNickname] = useState<{ key: string; name: string }>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const sync = useCallback(async (active: InjectedWallet, ask = false) => {
@@ -144,11 +146,38 @@ export function useWallet() {
   const valid = Boolean(session && session.expires > Date.now());
   const signedIn = valid && session?.mode === "wallet" && sameAddress(info.address, session.address ?? null);
   const isDemo = valid && session?.mode === "demo";
+  const nicknameKey = signedIn && info.address ? "staycoin-wallet-nickname:" + info.address.toLowerCase() : "";
+  useEffect(() => {
+    if (!nicknameKey) return;
+    const load = () => {
+      let name = "";
+      try { name = localStorage.getItem(nicknameKey) ?? ""; } catch { /* Storage may be blocked. */ }
+      setSavedNickname({ key: nicknameKey, name });
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === nicknameKey || event.key === null) load();
+    };
+    load();
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [nicknameKey]);
+
+  const nickname = savedNickname?.key === nicknameKey ? savedNickname.name : "";
+  const saveNickname = (value: string) => {
+    const name = value.trim();
+    if (!nicknameKey || name.length > maxWalletNicknameLength) return false;
+    try {
+      if (name) localStorage.setItem(nicknameKey, name);
+      else localStorage.removeItem(nicknameKey);
+      setSavedNickname({ key: nicknameKey, name });
+      return true;
+    } catch { return false; }
+  };
   const demoSignIn = () => {
     setError("");
     setSession({ mode: "demo", expires: Date.now() + sessionLifetime });
   };
   const signOut = () => { setSession(null); setError(""); };
   return { ...info, signedIn, isDemo, ready: info.chain === sepolia.hex, signIn, demoSignIn, signOut,
-    switchNetwork, provider, busy, error };
+    switchNetwork, provider, busy, error, nickname, saveNickname };
 }

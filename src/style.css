@@ -43,11 +43,14 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .main-nav a { color: var(--muted); font-weight: 650; font-size: .875rem; padding: 26px 0; position: relative; white-space: nowrap; }
 .main-nav a[aria-current], .main-nav a:hover { color: var(--brand); }
 .main-nav a[aria-current]::after { content: ""; position: absolute; height: 3px; bottom: 0; inset-inline: 0; border-radius: 3px; background: #28b9e9; }
-.wallet-header { display: flex; gap: 10px; align-items: center; }
+.topbar .wordmark { flex-shrink: 0; }
+.wallet-header { display: flex; gap: 10px; align-items: center; min-width: 0; }
 .button { display: inline-flex; gap: 9px; align-items: center; justify-content: center; border: 1px solid transparent; background: var(--brand); color: white; border-radius: 12px; min-height: 46px; padding: 10px 17px; font-size: .875rem; font-weight: 750; white-space: nowrap; transition: background .18s, box-shadow .18s; }
 .button:not(:disabled):hover { background: #17236c; box-shadow: 0 4px 12px #1e2c8820; }
-.wallet-button { background: #eef0ff; color: var(--brand); border-color: #dde2ff; }
+.wallet-button { background: #eef0ff; color: var(--brand); border-color: #dde2ff; min-width: 0; }
 .wallet-button:not(:disabled):hover { background: #e4e8ff; }
+.wallet-button svg, .wallet-header .menu-button { flex-shrink: 0; }
+.wallet-label { min-width: 0; max-width: 10rem; overflow: hidden; text-overflow: ellipsis; }
 .wallet-address { display: flex; align-items: center; gap: 8px; color: var(--brand); font-size: .875rem; font-weight: 750; }
 .menu-button { border: 1px solid var(--line); border-radius: 10px; background: white; color: var(--brand); padding: 8px; display: none; }
 .secondary { color: var(--brand); border-color: #dbe3f5; background: #fff; }
@@ -228,6 +231,10 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .signin-option { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
 .signin-option div { flex: 1 1 230px; }
 .signin-option .button { margin: 0; }
+.wallet-name-panel { margin-top: 15px; }
+.wallet-name-panel .form-row label { flex: 1 1 200px; max-width: 320px; }
+.wallet-name-panel .form-row .button { margin-block: 0; }
+.wallet-account-id { display: block; color: var(--muted); font-size: .8125rem; overflow-wrap: anywhere; margin-top: 6px; }
 .account-gate { margin-bottom: 16px; }
 .market-results { scroll-margin-top: 100px; }
 
