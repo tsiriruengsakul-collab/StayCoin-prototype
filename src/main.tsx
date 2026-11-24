@@ -62,6 +62,8 @@ function App() {
   };
 
   const latest = wallet.signedIn ? market.activity.find((item) => item.account.toLowerCase() === wallet.address?.toLowerCase()) : undefined;
+  const accountLabel = wallet.isDemo ? "Demo account" : wallet.signedIn && wallet.address
+    ? wallet.nickname || shortAddress(wallet.address) : "";
   const portal = route?.path === "/dashboard";
   const live = Boolean(market.synced && !wallet.isDemo);
   let message = "The Sepolia V3 and MockTHB addresses are required for live inventory. Sample inventory is shown.";
@@ -79,7 +81,7 @@ function App() {
             : routes.filter(({ customerNav }) => customerNav).map(({ path, title }) => <a href={path} key={path} aria-current={route?.path === path ? "page" : undefined}>{title}</a>)}
         </nav>
         <div className="wallet-header">
-          {wallet.signedIn || wallet.isDemo ? <a className="button wallet-button" href="/sign-in"><Wallet size={17} /> {wallet.isDemo ? "Demo account" : shortAddress(wallet.address!)}</a>
+          {accountLabel ? <a className="button wallet-button" href="/sign-in" title={accountLabel}><Wallet size={17} /><span className="wallet-label">{accountLabel}</span></a>
               : <a className="button wallet-button" href={signInLink(portal ? "/dashboard" : route?.path === "/sign-in" ? "/" : route?.path ?? "/")}><Wallet size={17} /> Sign in</a>}
           <button className="menu-button" aria-controls="main-nav" aria-expanded={menu} aria-label={menu ? "Close navigation" : "Open navigation"}
             onClick={() => setMenu(!menu)}>{menu ? <X /> : <Menu />}</button>
