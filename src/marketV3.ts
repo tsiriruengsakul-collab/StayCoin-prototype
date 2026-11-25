@@ -142,6 +142,7 @@ export type BookingHistory = {
   purchases: PaymentReceipt[];
   resales: Map<number, { sales: bigint; volume: bigint }>;
   checkedIn: Map<number, string>;
+  listings: Map<number, { block: number; timestamp?: number }>;
 };
 
 export function walletPaymentReceipts(purchases: PaymentReceipt[], address: string | null) {
@@ -170,27 +171,45 @@ export async function readBookingHistory(market: Contract, fromBlock: number, th
   const purchases = [...(base?.purchases ?? [])];
   const resales = new Map(base?.resales);
   const checkedIn = new Map(base?.checkedIn);
+  const listings = new Map(base?.listings);
   const provider = market.runner?.provider;
   if (!provider) throw new Error("Cannot read Sepolia history.");
   const address = await market.getAddress();
-  const topics = ["PrimaryPurchased", "Resold", "CheckedIn"].map((event) => marketInterface.getEvent(event)!.topicHash);
+  const topics = ["PrimaryPurchased", "Resold", "CheckedIn", "NightListed", "NightListingCancelled", "NightExpired"]
+    .map((event) => marketInterface.getEvent(event)!.topicHash);
   for (let start = base ? base.through + 1 : fromBlock; start <= through; start += 2_000) {
     const logs = await provider.getLogs({ address, topics: [topics], fromBlock: start, toBlock: Math.min(through, start + 1_999) });
     for (const log of logs.sort((a, b) => a.blockNumber - b.blockNumber || a.index - b.index)) {
       const event = marketInterface.parseLog(log);
       if (!event) continue;
-      if (event.name === "CheckedIn") checkedIn.set(Number(event.args.id), event.args.traveler);
-      else {
+      const id = Number(event.args.id);
+      if (event.name === "NightListed") {
+        if (!listings.has(id)) listings.set(id, { block: log.blockNumber });
+      } else if (event.name === "NightListingCancelled" || event.name === "NightExpired") {
+        listings.delete(id);
+      } else if (event.name === "CheckedIn") {
+        checkedIn.set(id, event.args.traveler);
+        listings.delete(id);
+      } else {
         const entry = paymentEvent(event, log.transactionHash, log.blockNumber);
         purchases.push(entry);
         if (entry.seller) {
+          listings.delete(id);
           const prior = resales.get(entry.id) ?? { sales: 0n, volume: 0n };
           resales.set(entry.id, { sales: prior.sales + 1n, volume: prior.volume + entry.paid });
         }
       }
     }
   }
-  return { through, purchases, resales, checkedIn };
+  const listingBlocks = new Map<number, ReturnType<typeof provider.getBlock>>();
+  await Promise.all(Array.from(listings, async ([id, listing]) => {
+    if (listing.timestamp !== undefined) return;
+    const request = listingBlocks.get(listing.block) ?? provider.getBlock(listing.block).catch(() => null);
+    listingBlocks.set(listing.block, request);
+    const block = await request;
+    if (block) listings.set(id, { ...listing, timestamp: block.timestamp });
+  }));
+  return { through, purchases, resales, checkedIn, listings };
 }
 
 export async function verifyPurchaseReceipt(market: Contract, token: Contract, id: number, buyer: string, receipt: TransactionReceipt) {

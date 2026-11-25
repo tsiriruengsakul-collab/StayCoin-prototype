@@ -155,6 +155,8 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .split-grid strong { color: var(--ink); overflow-wrap: anywhere; }
 .resale-page { max-width: 1020px; }
 .resale-card { padding: clamp(16px, 3vw, 26px); }
+.resale-card-new { background: #f0fbf9; border-color: #b8e7df; }
+.resale-new-badge { background: #d9f4ee; color: #146159; }
 .resale-card-main { display: flex; align-items: center; justify-content: space-between; gap: 26px; }
 .resale-card .booking-heading { align-items: flex-start; }
 .resale-card .booking-heading h3 { overflow-wrap: anywhere; }
