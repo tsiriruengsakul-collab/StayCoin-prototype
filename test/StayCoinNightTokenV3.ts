@@ -232,6 +232,28 @@ describe("StayCoin V3 MockTHB lifecycle", function () {
     assert.equal(walletPaymentReceipts(history.purchases, f.guest.address)[0].resale, undefined);
   });
 
+  it("tracks when a listing is posted, preserves the time after a price update, and resets it on relisting", async () => {
+    await book();
+    const listed = await f.list();
+    const timestamp = (await f.ethers.provider.getBlock(listed.blockNumber))!.timestamp;
+    const updated = await f.list(thb(3100));
+    const initial = await readBookingHistory(f.market, f.deployBlock, updated.blockNumber);
+    assert.deepEqual(initial.listings.get(1), { block: listed.blockNumber, timestamp });
+
+    const cancelled = await confirmed(f.market.connect(f.travelerA).getFunction("cancelListing")(1));
+    const closed = await readBookingHistory(f.market, f.deployBlock, cancelled.blockNumber, initial);
+    assert.equal(closed.listings.has(1), false);
+    const relisted = await f.list();
+    const relistedTime = (await f.ethers.provider.getBlock(relisted.blockNumber))!.timestamp;
+    const active = await readBookingHistory(f.market, f.deployBlock, relisted.blockNumber, closed);
+    assert.deepEqual(active.listings.get(1), { block: relisted.blockNumber, timestamp: relistedTime });
+
+    await f.approve(f.travelerB, resale);
+    const sale = await f.buyResale();
+    const sold = await readBookingHistory(f.market, f.deployBlock, sale.blockNumber, active);
+    assert.equal(sold.listings.has(1), false);
+  });
+
   it("stops multi-step checkout if the wallet changes after approval", async () => {
     await f.mint();
     const data = (await f.ethers.provider.getBlock("latest"))!;

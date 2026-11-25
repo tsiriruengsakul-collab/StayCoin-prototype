@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Building2, CalendarDays, ExternalLink, Hotel, KeyRound, Repeat2 } from "lucide-react";
 import { getAddress } from "ethers";
 import { dateKey, DAY, displayDay, futureStayDate, sameAddress, sepolia, shortAddress } from "./chain";
@@ -92,6 +92,7 @@ type ResaleCardProps = {
   stay: string;
   reference?: string;
   example?: boolean;
+  newListing?: boolean;
   price: bigint;
   originalPrice: bigint;
   fee: bigint;
@@ -99,13 +100,14 @@ type ResaleCardProps = {
   action?: ReactNode;
 };
 
-function ResaleCard({ hotel, stay, reference, example, price, originalPrice, fee, payout, action }: ResaleCardProps) {
-  return <article className="panel resale-card">
+function ResaleCard({ hotel, stay, reference, example, newListing, price, originalPrice, fee, payout, action }: ResaleCardProps) {
+  return <article className={newListing ? "panel resale-card resale-card-new" : "panel resale-card"}>
     <div className="resale-card-main">
       <div className="booking-heading">
         <span className="tile-icon" aria-hidden="true"><Repeat2 size={22} /></span>
         <div>
           {example && <span className="pill">Example listing</span>}
+          {newListing && <span className="pill resale-new-badge">New listing</span>}
           <h3>{hotel}</h3>
           <p>{stay}</p>
           {reference && <p className="resale-reference">{reference}</p>}
@@ -129,9 +131,26 @@ function ResaleCard({ hotel, stay, reference, example, price, originalPrice, fee
 
 export function Resale({ market }: { market: Market }) {
   const { wallet } = market;
+  const [, refreshClock] = useState(0);
   const blockTime = wallet.isDemo ? undefined : market.synced?.blockTime;
   const listings = market.synced?.data.nights.filter((night) =>
     night.quote && blockTime !== undefined && canResell(night, blockTime)) ?? [];
+  const newListings = new Set<number>();
+  const now = Date.now();
+  let nextExpiration = Infinity;
+  for (const night of listings) {
+    const listedAt = market.history?.listings.get(night.id)?.timestamp;
+    if (listedAt === undefined) continue;
+    const expiration = (listedAt + 30 * 60) * 1000;
+    if (expiration <= now) continue;
+    newListings.add(night.id);
+    nextExpiration = Math.min(nextExpiration, expiration);
+  }
+  useEffect(() => {
+    if (!Number.isFinite(nextExpiration)) return;
+    const timer = window.setTimeout(() => refreshClock((version) => version + 1), Math.max(0, nextExpiration - Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [nextExpiration]);
   const demoPrice = BigInt(demoResale.price) * 100n;
   const demoOriginal = BigInt(demoResale.previousPrice) * 100n;
   return <section className="shell content-page resale-page">
@@ -152,7 +171,7 @@ export function Resale({ market }: { market: Market }) {
             : isHotel ? <a href="/dashboard" className="button secondary">View hotel inventory</a>
             : <button className="button" disabled={!market.canWrite || market.busy}
               onClick={() => void market.checkout(night, true)}>Buy resale</button>;
-          return <ResaleCard key={night.id} hotel={night.hotelName} reference={bookingReference(night.id)}
+          return <ResaleCard key={night.id} hotel={night.hotelName} reference={bookingReference(night.id)} newListing={newListings.has(night.id)}
             stay={night.roomCategory + " · " + displayDay(dateKey(night.stayDate)) + " · Bangkok"}
             price={night.listingPrice} originalPrice={night.originalPrice} fee={split.platform} payout={payout} action={action} />;
         })}</div>}
