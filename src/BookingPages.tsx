@@ -93,12 +93,13 @@ type ResaleCardProps = {
   reference?: string;
   example?: boolean;
   price: bigint;
+  originalPrice: bigint;
   fee: bigint;
   payout?: { label: string; amount: bigint };
   action?: ReactNode;
 };
 
-function ResaleCard({ hotel, stay, reference, example, price, fee, payout, action }: ResaleCardProps) {
+function ResaleCard({ hotel, stay, reference, example, price, originalPrice, fee, payout, action }: ResaleCardProps) {
   return <article className="panel resale-card">
     <div className="resale-card-main">
       <div className="booking-heading">
@@ -114,6 +115,7 @@ function ResaleCard({ hotel, stay, reference, example, price, fee, payout, actio
         <div className="resale-price">
           <span>Resale price</span>
           <div><strong>{formatTHB(price)}</strong> <small>{example ? "THB" : "MockTHB"}</small></div>
+          <p className="resale-original">Original price {formatTHB(originalPrice)}</p>
         </div>
         {action}
       </div>
@@ -136,7 +138,7 @@ export function Resale({ market }: { market: Market }) {
     <PageIntro title="Resale marketplace" description="Find a stay listed by another traveler and see the total price before you book." />
     {blockTime === undefined ? <ResaleCard example hotel={demoResale.name}
       stay={demoResale.city + " · " + demoResale.room + " · " + displayDay(demoResale.date)}
-      price={demoPrice} fee={estimateResale(demoPrice, demoOriginal, demoOriginal).platform}
+      price={demoPrice} originalPrice={demoOriginal} fee={estimateResale(demoPrice, demoOriginal, demoOriginal).platform}
       action={!wallet.signedIn && !wallet.isDemo && <a href={signInLink("/resale")} className="button secondary">Sign in</a>} />
       : listings.length === 0 ? <Empty title="No active resale listings" detail="Listed bookings appear here until they sell or reach the stay date." />
         : <div className="panel-list">{listings.map((night) => {
@@ -152,7 +154,7 @@ export function Resale({ market }: { market: Market }) {
               onClick={() => void market.checkout(night, true)}>Buy resale</button>;
           return <ResaleCard key={night.id} hotel={night.hotelName} reference={bookingReference(night.id)}
             stay={night.roomCategory + " · " + displayDay(dateKey(night.stayDate)) + " · Bangkok"}
-            price={night.listingPrice} fee={split.platform} payout={payout} action={action} />;
+            price={night.listingPrice} originalPrice={night.originalPrice} fee={split.platform} payout={payout} action={action} />;
         })}</div>}
   </section>;
 }
